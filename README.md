@@ -18,31 +18,31 @@ uv pip install -e pyroki
 
 ## Parameters
 
-| Parameter | Type | Default | Purpose |
-|-----------|------|---------|---------|
-| `path` | str | - | URDF file path, directory, or robot description name |
-| `vis_port` | int | - | Visualization server port |
-| `api_port` | int | - | API server port |
-| `ik_targets` | str | None | Comma-separated IK target links |
-| `custom_joints` | str | None | Custom joints (name:lower:upper) |
-| `joint_limits` | str | None | Override joint limits (name:lower:upper) |
-| `exponential_alpha` | float | 0.05 | Smoothing factor (0.01-1.0) |
-| `history_length` | int | 15 | Smoothing history length |
-| `change_tolerance` | float | 0.01 | Minimum change threshold |
+| Parameter | Type | Purpose |
+|-----------|------|---------|
+| `path` | str | URDF file path, directory, or robot description name |
+| `vis_port` | int | Visualization server port |
+| `api_port` | int | API server port |
+| `ik_targets` | str | Comma-separated IK target links |
+| `custom_joints` | str | Custom joints (name:lower:upper) |
+| `joint_limits` | str | Override joint limits (name:lower:upper) |
+| `exponential_alpha` | float | Smoothing factor (0.01-1.0) |
+| `history_length` | int | Smoothing history length |
+| `change_tolerance` | float | Minimum change threshold |
 
 ## Launch Commands
 
 ```bash
-# Basic launch
+# Basic launch with path to custom urdf
 python src/main.py --path path/to/robot.urdf --vis-port 8080 --api-port 5000
 
 # Launch with robot description
 python src/main.py --path g1_description --vis-port 8080 --api-port 5000
 
-# With IK targets
+# With IK targets. This enables IK movement of the specified links
 python src/main.py --path g1_description --vis-port 8080 --api-port 5000 --ik-targets "left_palm_link,right_palm_link"
 
-# With custom joints
+# With custom joints added. Schema is joint:lower_limit:upper_limit
 python src/main.py --path g1_description --vis-port 8080 --api-port 5000 --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
 
 # Full example with custom parameters and smoothing
