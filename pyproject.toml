@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116.1",
+    "ffmpeg>=1.4",
     "flask>=3.1.1",
     "pyglet<2",
     "robot-descriptions>=1.20.0",

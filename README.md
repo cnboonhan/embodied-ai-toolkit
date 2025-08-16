@@ -14,6 +14,7 @@ uv venv -p 3.11
 source .venv/bin/activate
 uv sync
 uv pip install -e pyroki
+uv pip install -e lerobot # for data collection
 ```
 
 ## Parameters
@@ -78,7 +79,7 @@ curl -X POST http://localhost:5000/update_joints -H "Content-Type: application/j
 ## Data Collection Minimal Example
 ```
 # Controller
-python src/robot_server.py --label "G1 Action Controller" --path g1_description --vis-port 8080 --api-port 5000 --ik_targets "left_palm_link,right_palm_link" --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
+python src/robot_server.py --label "G1 Action Controller" --path g1_description --vis-port 8080 --api-port 5000 --ik_targets "left_palm_link,right_palm_link,torso_link" --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
 # Visualizer
 python src/robot_server.py --label "G1 State Visualizer" --path g1_description --vis-port 8081 --api-port 5001 --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
 # Mock Control Loop

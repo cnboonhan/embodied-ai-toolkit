@@ -97,7 +97,18 @@ class DataCollectionAdapter(ABC):
     
     def start_collection(self) -> None:
         """
-        Start continuous data collection at the specified frequency.,
+        Start continuous data collection at the specified frequency.
+        """
+        if self.is_collecting:
+            print("⚠️  Data collection is already running")
+            return
+            
+        self.is_collecting = True
+        self.collection_thread = threading.Thread(target=self._collection_loop, daemon=True)
+        self.collection_thread.start()
+        print(f"🚀 Started data collection at {self.hz} Hz")
+    
+    def stop_collection(self) -> None:
         """
         Stop continuous data collection.
         """
