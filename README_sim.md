@@ -1,4 +1,5 @@
-# Humanoid Controller Simulation Examples
+# Simulation Examples
+Examples of toolkit integration with simulation.
 
 ## AgiBot
 ```bash
@@ -6,7 +7,6 @@
 # Clone Repo and Build GenieSim Docker Container: https://agibot-world.com/sim-evaluation/docs/#/v2
 # Download Assets into genie_sim folder: https://huggingface.co/datasets/agibot-world/GenieSimAssets
 # Build docker containers: https://agibot-world.com/sim-evaluation/docs/#/v2?id=_231-docker-container-recommended
-# Run Simulation: https://agibot-world.com/sim-evaluation/docs/#/v2?id=_31-how-to-run-simulation-with-just-one-line-of-code
 
 python3 src/main.py --path agibot-model.urdf --vis-port 8080 --api-port 5000 --ik-targets "arm_left_link7,arm_right_link7" --custom-joints "left_hand:0:2,right_hand:0:2"
 

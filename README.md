@@ -66,6 +66,6 @@ python src/main.py --path g1_description \
 # get joints
 curl -X GET http://localhost:5000/get_joints
 
-# Update joints
+# Update joints. This can be streamed from a teleoperation device
 curl -X POST http://localhost:5000/update_joints -H "Content-Type: application/json" -d '{"joints": {"left_hand": {"value": 0.0}, "right_hand": {"value": 1.2}}}'
 ```
