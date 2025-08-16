@@ -78,9 +78,11 @@ curl -X POST http://localhost:5000/update_joints -H "Content-Type: application/j
 
 ## Data Collection Minimal Example
 ```
-# Controller
+# Data Visualizer
+rerun --serve-web --web-viewer-port 9090 --port 9876 
+# Robot Action Controller
 python src/robot_server.py --label "G1 Action Controller" --path g1_description --vis-port 8080 --api-port 5000 --ik_targets "left_palm_link,right_palm_link,torso_link" --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
-# Visualizer
+# Robot State Visualizer
 python src/robot_server.py --label "G1 State Visualizer" --path g1_description --vis-port 8081 --api-port 5001 --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
 # Mock Control Loop
 while true; do curl -s -X GET "http://127.0.0.1:5000/get_joints" | curl -s -X POST "http://127.0.0.1:5001/update_joints" -H "Content-Type: application/json" -d @-; sleep 0.05; done
