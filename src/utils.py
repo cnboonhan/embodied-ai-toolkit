@@ -509,7 +509,7 @@ class RobotConfig:
             return {
                 "success": False,
                 "error": error_msg,
-                "current_value": current_value,
+                "value": current_value,
                 "requested_value": value,
                 "final_value": final_value,
                 "limits": [slider.min, slider.max],
@@ -523,7 +523,7 @@ class RobotConfig:
                 "success": True,
                 "skipped": True,
                 "reason": "No change detected",
-                "current_value": current_value,
+                "value": current_value,
                 "requested_value": value,
                 "final_value": final_value,
                 "limits": [slider.min, slider.max],
@@ -584,7 +584,7 @@ class RobotConfig:
         info = {}
         for name, slider in sliders.items():
             info[name] = {
-                "current_value": slider.value,
+                "value": slider.value,
                 "limits": [slider.min, slider.max],
             }
         return info

@@ -143,10 +143,10 @@ class ROS2JointStateAdapter(JointStateAdapter):
             timestamp = time.time()
             
             for joint_name, joint_data in json_data.items():
-                if isinstance(joint_data, dict) and "current_value" in joint_data and "limits" in joint_data:
+                if isinstance(joint_data, dict) and "value" in joint_data and "limits" in joint_data:
                     try:
                         joints[joint_name] = JointData(
-                            current_value=joint_data["current_value"],
+                            current_value=joint_data["value"],
                             limits=joint_data["limits"]
                         )
                     except ValueError as e:
@@ -156,7 +156,7 @@ class ROS2JointStateAdapter(JointStateAdapter):
                 else:
                     if self.node:
                         self.node.get_logger().warning(
-                            f"Joint {joint_name} missing required fields (current_value, limits): {joint_data}"
+                            f"Joint {joint_name} missing required fields (value, limits): {joint_data}"
                         )
             
             if not joints:
@@ -226,7 +226,7 @@ class ROS2JointStateAdapter(JointStateAdapter):
             if api_joint_name in smoothed_joint_state.joints:
                 joint_data = smoothed_joint_state.joints[api_joint_name]
                 ros_joint_name = mapping_info['ros_name']
-                joint_value = joint_data.current_value
+                joint_value = joint_data.value
                 
                 # Find the joint index in the ROS message
                 joint_index = None

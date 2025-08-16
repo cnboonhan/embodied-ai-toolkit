@@ -21,6 +21,7 @@ def main(
     exponential_alpha: float = 0.05,
     history_length: int = 15,
     change_tolerance: float = 0.01,
+    label: str | None = None,
 ) -> None:
     custom_joints_list = parse_custom_joints(custom_joints)
     joint_limits_dict = parse_joint_limits(joint_limits)
@@ -29,7 +30,7 @@ def main(
         ik_targets_list = [name.strip() for name in ik_targets.split(",")]
     
     robot_viz = RobotVisualizer(
-        path, vis_port, ik_targets_list, custom_joints_list, exponential_alpha, history_length, change_tolerance, joint_limits_dict
+        path, vis_port, ik_targets_list, custom_joints_list, exponential_alpha, history_length, change_tolerance, joint_limits_dict, label
     )
     api_server = FlaskAPIServer(robot_viz.robot_config, api_port)
     flask_thread = threading.Thread(target=api_server.run, daemon=True)

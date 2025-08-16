@@ -19,12 +19,12 @@ class JointData:
     Container for individual joint information following the joint_state_schema.json structure.
     
     Based on the schema, this class contains exactly the fields defined:
-    - current_value: Current position/value of the joint (required, type: number)
+    - value: Current position/value of the joint (required, type: number)
     - limits: Joint limits as [min, max] (required, type: array with exactly 2 numbers)
     
     The schema specifies "additionalProperties": false, so no other fields are allowed.
     """
-    current_value: float
+    value: float
     limits: List[float]  # [min, max] - exactly 2 values required
     
     def __post_init__(self):
@@ -84,7 +84,7 @@ class JointStateAdapter(ABC):
         
         Args:
             joint_name: Name of the joint (for logging purposes)
-            joint_data: Joint data containing current_value and limits
+            joint_data: Joint data containing value and limits
             
         Returns:
             Reversed joint value
@@ -97,7 +97,7 @@ class JointStateAdapter(ABC):
         
         lower_limit, upper_limit = joint_data.limits
         midpoint = (lower_limit + upper_limit) / 2
-        distance_from_midpoint = joint_data.current_value - midpoint
+        distance_from_midpoint = joint_data.value - midpoint
         reversed_value = midpoint - distance_from_midpoint
         
         return reversed_value
@@ -120,11 +120,11 @@ class JointStateAdapter(ABC):
         for api_joint_name, mapping_info in joint_mappings.items():
             if api_joint_name in processed_state.joints and mapping_info.get('reverse', False):
                 joint_data = processed_state.joints[api_joint_name]
-                original_value = joint_data.current_value
+                original_value = joint_data.value
                 
                 try:
                     reversed_value = self.apply_joint_reversal(api_joint_name, joint_data)
-                    joint_data.current_value = reversed_value
+                    joint_data.value = reversed_value
                 except ValueError as e:
                     # Log warning but continue with original value
                     # Concrete implementations can override this behavior
@@ -159,7 +159,7 @@ class JointStateAdapter(ABC):
             historical_values = []
             for hist_data in self.server_joint_state_history:
                 if joint_name in hist_data.joints:
-                    historical_values.append(hist_data.joints[joint_name].current_value)
+                    historical_values.append(hist_data.joints[joint_name].value)
             
             if historical_values:
                 # Apply exponential smoothing using the full history
@@ -171,10 +171,10 @@ class JointStateAdapter(ABC):
                     smoothed_value = alpha * historical_values[i] + (1 - alpha) * smoothed_value
                 
                 # Apply smoothing with the new value
-                final_smoothed_value = alpha * joint_data.current_value + (1 - alpha) * smoothed_value
+                final_smoothed_value = alpha * joint_data.value + (1 - alpha) * smoothed_value
                 
                 # Update the smoothed state
-                smoothed_state.joints[joint_name].current_value = final_smoothed_value
+                smoothed_state.joints[joint_name].value = final_smoothed_value
         
         return smoothed_state
     

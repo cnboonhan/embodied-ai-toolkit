@@ -15,16 +15,9 @@ class FlaskAPIServer:
         @self.app.route("/update_joints", methods=["POST"])
         def update_joints():
             try:
-                data = request.get_json()
-                if not data:
-                    return jsonify({"error": "No JSON data provided"}), 400
-
-                joints_data = data.get("joints")
+                joints_data = request.get_json()
                 if not joints_data:
-                    return (
-                        jsonify({"error": "joints data is required"}),
-                        400,
-                    )
+                    return jsonify({"error": "No JSON data provided"}), 400
 
                 if not isinstance(joints_data, dict):
                     return (

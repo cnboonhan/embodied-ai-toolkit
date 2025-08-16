@@ -23,8 +23,9 @@ class RobotVisualizer:
         history_length: int = 15,
         change_tolerance: float = 0.01,
         joint_limits: Dict[str, tuple] = None,
+        label: str | None = None,
     ):
-        self.server = viser.ViserServer(port=port)
+        self.server = viser.ViserServer(port=port, label=label)
         self.urdf = load_urdf_with_fallback(urdf_path)
 
         preprocessed_urdf = self._load_urdf_for_pyroki(self.urdf)

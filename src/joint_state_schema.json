@@ -9,10 +9,10 @@
       "type": "object",
       "description": "Joint information for a single joint",
       "properties": {
-        "current_value": {
-          "type": "number",
-          "description": "Current position/value of the joint"
-        },
+            "value": {
+      "type": "number",
+      "description": "Current position/value of the joint"
+    },
         "limits": {
           "type": "array",
           "description": "Joint limits as [min, max]",
@@ -23,7 +23,7 @@
           "maxItems": 2
         }
       },
-      "required": ["current_value", "limits"],
+      "required": ["value", "limits"],
       "additionalProperties": false
     }
   },
@@ -32,11 +32,11 @@
   "examples": [
     {
       "joint1": {
-        "current_value": 1.5,
+        "value": 1.5,
         "limits": [-3.14159, 3.14159]
       },
       "joint2": {
-        "current_value": -0.8,
+        "value": -0.8,
         "limits": [-1.57, 1.57]
       }
     }
