@@ -14,7 +14,6 @@ uv venv -p 3.11
 source .venv/bin/activate
 uv sync
 uv pip install -e pyroki
-uv pip install -e lerobot # for data collection
 ```
 
 ## Parameters
