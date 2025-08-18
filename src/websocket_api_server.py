@@ -136,9 +136,7 @@ class WebSocketAPIServer:
         
         if input_upper_limit != input_lower_limit:
             normalized_position = (provided_value - input_lower_limit) / (input_upper_limit - input_lower_limit)
-            print(normalized_position)
             transformed_value = slider_min + normalized_position * (slider_max - slider_min)
-            print(transformed_value)
             return transformed_value
         else:
             return (slider_min + slider_max) / 2
