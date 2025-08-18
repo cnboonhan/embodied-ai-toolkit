@@ -66,9 +66,10 @@ python src/robot_server.py --path g1_description \
 echo "{}" | websocat ws://localhost:5000/ws/update_joints
 ```
 
-#### Update Joint Values
+#### Update Joint Values 
 ```bash
-echo '{"left_hand": {"value": 0.0}, "right_hand": {"value": 1.0}}' | websocat ws://localhost:5000/ws/update_joints
+# Both will set to 0.  When limits are specified, values are normalized from provided limits to urdf limits
+echo '{"left_hand": {"value": 0.0}, "right_hand": {"value": 0.0, "limits": [-100, 100]}}' | websocat ws://localhost:5000/ws/update_joints
 ```
 
 #### Real-time Monitoring
