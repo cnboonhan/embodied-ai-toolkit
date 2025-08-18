@@ -8,7 +8,7 @@ import pyroki as pk
 import viser
 from viser.extras import ViserUrdf
 
-from utils import ExponentialSmoother, RobotConfig, IKSolver, load_urdf_with_fallback
+from utils import RobotConfig, IKSolver, load_urdf_with_fallback
 
 
 class RobotVisualizer:
@@ -19,8 +19,6 @@ class RobotVisualizer:
         port: int,
         end_effectors: List[str] = None,
         custom_joints: List[tuple] = None,
-        exponential_alpha: float = 0.1,
-        history_length: int = 15,
         change_tolerance: float = 0.01,
         joint_limits: Dict[str, tuple] = None,
         label: str | None = None,
@@ -30,8 +28,7 @@ class RobotVisualizer:
 
         preprocessed_urdf = self._load_urdf_for_pyroki(self.urdf)
         self.robot = pk.Robot.from_urdf(preprocessed_urdf)
-        self.smoother = ExponentialSmoother(alpha=exponential_alpha, history_length=history_length)
-        self.robot_config = RobotConfig(change_tolerance=change_tolerance, viser_urdf=self._create_viser_urdf(), custom_joints=custom_joints, smoother=self.smoother, joint_limits=joint_limits)
+        self.robot_config = RobotConfig(change_tolerance=change_tolerance, viser_urdf=self._create_viser_urdf(), custom_joints=custom_joints, joint_limits=joint_limits)
         self.enable_server = False
 
         if end_effectors is None:
@@ -184,8 +181,6 @@ class RobotVisualizer:
             @enable_ik_cb.on_update
             def _(_):
                 self._toggle_ik(enable_ik_cb.value)
-                if enable_ik_cb.value:
-                    self.smoother.clear_history()
 
             @show_meshes_cb.on_update
             def _(_):
@@ -199,23 +194,7 @@ class RobotVisualizer:
             def _(_):
                 self.enable_server = enable_server_cb.value
 
-        with self.server.gui.add_folder("Smoothing Parameters"):
-            alpha_input = self.server.gui.add_number(
-                label="Exponential Alpha",
-                min=0.01,
-                max=1.0,
-                step=0.01,
-                initial_value=self.smoother.alpha,
-            )
-            
-            history_input = self.server.gui.add_number(
-                label="History Length",
-                min=5,
-                max=50,
-                step=1,
-                initial_value=self.smoother.history_length,
-            )
-            
+        with self.server.gui.add_folder("Settings"):
             tolerance_input = self.server.gui.add_number(
                 label="Change Tolerance",
                 min=1e-8,
@@ -223,16 +202,6 @@ class RobotVisualizer:
                 step=1e-8,
                 initial_value=self.robot_config.get_change_tolerance(),
             )
-
-            @alpha_input.on_update
-            def _(_):
-                self.smoother.update_parameters(alpha=alpha_input.value)
-                print(f"🔄 Updated exponential alpha to: {alpha_input.value:.3f}")
-
-            @history_input.on_update
-            def _(_):
-                self.smoother.update_parameters(history_length=int(history_input.value))
-                print(f"🔄 Updated history length to: {int(history_input.value)}")
 
             @tolerance_input.on_update
             def _(_):

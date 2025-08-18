@@ -7,7 +7,7 @@ import tyro
 from tabulate import tabulate
 
 from robot_visualizer import RobotVisualizer
-from flask_api_server import FlaskAPIServer
+from websocket_api_server import WebSocketAPIServer
 from utils import parse_custom_joints, parse_joint_limits
 
 
@@ -18,8 +18,6 @@ def main(
     ik_targets: str | None = None,
     custom_joints: str | None = None,
     joint_limits: str | None = None,
-    exponential_alpha: float = 0.05,
-    history_length: int = 15,
     change_tolerance: float = 0.01,
     label: str | None = None,
 ) -> None:
@@ -30,19 +28,17 @@ def main(
         ik_targets_list = [name.strip() for name in ik_targets.split(",")]
     
     robot_viz = RobotVisualizer(
-        path, vis_port, ik_targets_list, custom_joints_list, exponential_alpha, history_length, change_tolerance, joint_limits_dict, label
+        path, vis_port, ik_targets_list, custom_joints_list, change_tolerance, joint_limits_dict, label
     )
-    api_server = FlaskAPIServer(robot_viz.robot_config, api_port)
-    flask_thread = threading.Thread(target=api_server.run, daemon=True)
-    flask_thread.start()
+    api_server = WebSocketAPIServer(robot_viz.robot_config, api_port)
+    websocket_thread = threading.Thread(target=api_server.run, daemon=True)
+    websocket_thread.start()
 
     print()
     print("🤖 Robot Visualization and Control Server")
     server_info = [
         ["📊 Viser visualization server", f"http://localhost:{vis_port}"],
-        ["🔌 Flask API server", f"http://localhost:{api_port}"],
-        ["🔄 Exponential smoothing (α)", f"{exponential_alpha:.2f}"],
-        ["📈 History length", f"{history_length} samples"],
+        ["🔌 WebSocket API server", f"ws://localhost:{api_port}"],
         ["🎯 Change tolerance", f"{change_tolerance:.2e}"],
     ]
 
@@ -71,13 +67,19 @@ def main(
         print(tabulate(joint_limits_data, headers=["Joint Name", "Custom Limits"], tablefmt="grid"))
 
     print()
-    print("📋 Available API Endpoints")
-    api_endpoints_data = [
-        ["POST /update_joints", "Update one or more joints at once"],
-        ["GET /get_joints", "Get all joint information (URDF + custom joints)"],
+    print("📋 Available WebSocket Endpoints")
+    websocket_endpoints_data = [
+        ["ws://localhost:{api_port}/ws/update_joints", "WebSocket endpoint for joint updates and queries"],
     ]
     
-    print(tabulate(api_endpoints_data, headers=["Endpoint", "Description"], tablefmt="grid"))
+    print(tabulate(websocket_endpoints_data, headers=["Endpoint", "Description"], tablefmt="grid"))
+
+    print()
+    print("💡 WebSocket Usage:")
+    print("  • Connect to ws://localhost:{api_port}/ws/update_joints")
+    print("  • Send empty message or null to get current joint state")
+    print("  • Send joint updates in format: {{\"joint_name\": {{\"value\": joint_value}}}}")
+    print("  • Receive real-time updates when joints change")
 
     try:
         while True:

@@ -227,131 +227,7 @@ def _solve_ik_jax(
     return sol[JointVar(0)]
 
 
-class ExponentialSmoother:
-    """Handles exponential smoothing with history for joint value smoothing."""
 
-    def __init__(self, alpha: float = 0.1, history_length: int = 15):
-        """
-        Initialize the exponential smoother.
-
-        Args:
-            alpha: Smoothing factor (0.0-1.0). Lower values = smoother, higher values = more responsive
-            history_length: Number of historical values to maintain
-        """
-        self.alpha = alpha
-        self.history_length = history_length
-        self.joint_history: Dict[str, List[float]] = {}
-
-    def smooth_value(self, joint_name: str, new_value: float) -> float:
-        """
-        Apply exponential smoothing using all history values for better noise reduction.
-
-        Args:
-            joint_name: Name of the joint being smoothed
-            new_value: New value to add to history and smooth
-
-        Returns:
-            Smoothed value using exponential weighting of all history
-        """
-        if joint_name not in self.joint_history:
-            # Initialize with the new value repeated
-            self.joint_history[joint_name] = [new_value] * self.history_length
-            return new_value
-
-        # Add new value to history
-        self.joint_history[joint_name].append(new_value)
-
-        # Keep only the last N values
-        if len(self.joint_history[joint_name]) > self.history_length:
-            self.joint_history[joint_name] = self.joint_history[joint_name][
-                -self.history_length :
-            ]
-
-        # Use all values in history for smoothing
-        # Apply exponential weights: more recent values get higher weight
-        history_length = len(self.joint_history[joint_name])
-        weights = [
-            self.alpha * (1 - self.alpha) ** (history_length - 1 - i)
-            for i in range(history_length)
-        ]
-
-        # Normalize weights to sum to 1
-        total_weight = sum(weights)
-        if total_weight > 0:
-            normalized_weights = [w / total_weight for w in weights]
-        else:
-            # Fallback to equal weights if all weights are zero
-            normalized_weights = [1.0 / history_length] * history_length
-
-        # Calculate weighted average using all history values
-        smoothed_value = sum(
-            w * v for w, v in zip(normalized_weights, self.joint_history[joint_name])
-        )
-
-        return smoothed_value
-
-    def get_history(self, joint_name: str) -> List[float]:
-        """
-        Get the current history for a joint.
-
-        Args:
-            joint_name: Name of the joint
-
-        Returns:
-            List of historical values for the joint
-        """
-        return self.joint_history.get(joint_name, [])
-
-    def clear_history(self, joint_name: str = None):
-        """
-        Clear history for a specific joint or all joints.
-
-        Args:
-            joint_name: Name of the joint to clear, or None to clear all
-        """
-        if joint_name is None:
-            self.joint_history.clear()
-        else:
-            self.joint_history.pop(joint_name, None)
-
-    def update_parameters(self, alpha: float = None, history_length: int = None):
-        """
-        Update smoothing parameters.
-
-        Args:
-            alpha: New smoothing factor
-            history_length: New history length
-        """
-        if alpha is not None:
-            self.alpha = alpha
-        if history_length is not None:
-            self.history_length = history_length
-            # Truncate existing histories if needed
-            for joint_name in self.joint_history:
-                if len(self.joint_history[joint_name]) > history_length:
-                    self.joint_history[joint_name] = self.joint_history[joint_name][
-                        -history_length:
-                    ]
-
-    def get_stats(self) -> Dict[str, any]:
-        """
-        Get statistics about the smoother.
-
-        Returns:
-            Dictionary with smoothing statistics
-        """
-        total_joints = len(self.joint_history)
-        total_values = sum(len(history) for history in self.joint_history.values())
-
-        return {
-            "alpha": self.alpha,
-            "history_length": self.history_length,
-            "total_joints": total_joints,
-            "total_values": total_values,
-            "average_values_per_joint": (
-                total_values / total_joints if total_joints > 0 else 0
-            ),
-        }
 
 
 class RobotConfig:
@@ -362,7 +238,6 @@ class RobotConfig:
         change_tolerance: float = 1e-6,
         viser_urdf=None,
         custom_joints: List[tuple] = None,
-        smoother=None,
         joint_limits: Dict[str, tuple] = None,
     ):
         """
@@ -372,13 +247,11 @@ class RobotConfig:
             change_tolerance: Minimum change threshold for joint updates
             viser_urdf: ViserUrdf instance for robot visualization
             custom_joints: List of (joint_name, lower_limit, upper_limit) tuples for custom joints
-            smoother: ExponentialSmoother instance for applying smoothing to joint updates
             joint_limits: Dictionary mapping joint names to (lower_limit, upper_limit) tuples for custom joint limits
         """
         self.change_tolerance = change_tolerance
         self.viser_urdf = viser_urdf
         self.custom_joints = custom_joints or []
-        self.smoother = smoother
         self.joint_limits = joint_limits or {}
 
         self.joint_sliders: Dict[str, viser.GuiInputHandle[float]] = {}
@@ -478,7 +351,7 @@ class RobotConfig:
         self, name: str, value: float, is_custom: bool = False
     ) -> Dict[str, Any]:
         """
-        Update a joint or custom value with validation, smoothing, and change detection.
+        Update a joint or custom value with validation and change detection.
 
         Args:
             name: Name of the joint or custom control
@@ -490,15 +363,9 @@ class RobotConfig:
         """
         current_value = self.get_value(name, is_custom=is_custom)
 
-        # Apply smoothing if smoother is available
-        if self.smoother is not None:
-            smoothed_value = self.smoother.smooth_value(name, value)
-        else:
-            smoothed_value = value
-
         # Validate and clamp value
         is_valid, error_msg, final_value = self.validate_value(
-            name, smoothed_value, is_custom=is_custom
+            name, value, is_custom=is_custom
         )
 
         if not is_valid and error_msg:
