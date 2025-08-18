@@ -57,13 +57,7 @@ class WebSocketAPIServer:
         """Handle joint update messages."""
         try:
             data = json.loads(message)
-
-            # If data is empty or None, return current joint state
-            if not data:
-                response = await self.get_joints()
-            else:
-                response = await self.update_joints(data)
-
+            response = await self.update_joints(data)
             await ws.send_str(json.dumps(response))
         except json.JSONDecodeError:
             await ws.send_str(json.dumps({"error": "Invalid JSON"}))
@@ -92,17 +86,10 @@ class WebSocketAPIServer:
                 else:
                     return {"error": f"Invalid data format for joint {joint_name}"}
 
-            # Update joints
-            joint_result = (
+            if joint_values:
                 self.robot_config.update_multiple_values(joint_values, is_custom=False)
-                if joint_values
-                else {"success": True, "results": {}}
-            )
-            custom_result = (
+            if custom_values:
                 self.robot_config.update_multiple_values(custom_values, is_custom=True)
-                if custom_values
-                else {"success": True, "results": {}}
-            )
 
             joints_info = self.robot_config.get_info(is_custom=False)
             custom_joints_info = self.robot_config.get_info(is_custom=True)
@@ -115,16 +102,7 @@ class WebSocketAPIServer:
         except Exception as e:
             return {"error": str(e)}
 
-    async def get_joints(self) -> Dict[str, Any]:
-        """Get current joint values."""
-        try:
-            joints_info = self.robot_config.get_info(is_custom=False)
-            custom_joints_info = self.robot_config.get_info(is_custom=True)
-            all_joints = {**joints_info, **custom_joints_info}
 
-            return all_joints
-        except Exception as e:
-            return {"error": str(e)}
 
     async def broadcast_update(self, update_data: Dict[str, Any]):
         """Broadcast updates to all connected clients."""
