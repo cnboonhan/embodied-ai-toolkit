@@ -16,6 +16,7 @@ uv sync
 uv pip install -e pyroki
 
 # Download and install websocat: https://github.com/vi/websocat/releases
+# Install rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 ## Parameters
@@ -73,20 +74,4 @@ echo '{"left_hand": {"value": 0.0}, "right_hand": {"value": 1.0}}' | websocat ws
 #### Real-time Monitoring
 ```bash
 websocat ws://localhost:5000/ws/update_joints
-```
-
-## Data Collection Minimal Example
-```
-# Data Visualizer
-rerun --serve-web --web-viewer-port 9090 --port 9876 
-# Robot Action Controller
-python src/robot_server.py --label "G1 Action Controller" --path g1_description --vis-port 8080 --api-port 5000 --ik_targets "left_palm_link,right_palm_link,torso_link" --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
-# Robot State Visualizer
-python src/robot_server.py --label "G1 State Visualizer" --path g1_description --vis-port 8081 --api-port 5001 --custom-joints "left_hand:0.0:1.0,right_hand:0.0:1.0"
-# Mock Control Loop (using WebSocket)
-while true; do 
-  echo "" | websocat ws://127.0.0.1:5000/ws/update_joints | \
-  websocat ws://127.0.0.1:5001/ws/update_joints; 
-  sleep 0.05; 
-done
 ```

@@ -77,12 +77,35 @@ class WebSocketAPIServer:
                 if isinstance(joint_data_item, dict) and "value" in joint_data_item:
                     value = joint_data_item["value"]
 
-                    if joint_name in self.robot_config.get_sliders(is_custom=False):
-                        joint_values[joint_name] = value
-                    elif joint_name in self.robot_config.get_sliders(is_custom=True):
-                        custom_values[joint_name] = value
+                    # Check if limits are provided in the joint data
+                    if "limits" in joint_data_item and isinstance(joint_data_item["limits"], list) and len(joint_data_item["limits"]) == 2:
+                        limits = joint_data_item["limits"]
+                        lower_limit, upper_limit = limits[0], limits[1]
+                        
+                        # Validate limits
+                        if not isinstance(lower_limit, (int, float)) or not isinstance(upper_limit, (int, float)):
+                            return {"error": f"Invalid limit types for joint {joint_name}"}
+                        
+                        if lower_limit >= upper_limit:
+                            return {"error": f"Invalid limits for joint {joint_name}: lower limit must be less than upper limit"}
+                        
+                        # Transform the provided value to fit within the provided limits
+                        if joint_name in self.robot_config.get_sliders(is_custom=False):
+                            transformed_value = self._transform_value_to_limits(value, lower_limit, upper_limit, joint_name, is_custom=False)
+                            joint_values[joint_name] = transformed_value
+                        elif joint_name in self.robot_config.get_sliders(is_custom=True):
+                            transformed_value = self._transform_value_to_limits(value, lower_limit, upper_limit, joint_name, is_custom=True)
+                            custom_values[joint_name] = transformed_value
+                        else:
+                            return {"error": f"Joint '{joint_name}' not found"}
                     else:
-                        return {"error": f"Joint '{joint_name}' not found"}
+                        # No limits provided, use existing limits
+                        if joint_name in self.robot_config.get_sliders(is_custom=False):
+                            joint_values[joint_name] = value
+                        elif joint_name in self.robot_config.get_sliders(is_custom=True):
+                            custom_values[joint_name] = value
+                        else:
+                            return {"error": f"Joint '{joint_name}' not found"}
                 else:
                     return {"error": f"Invalid data format for joint {joint_name}"}
 
@@ -102,7 +125,23 @@ class WebSocketAPIServer:
         except Exception as e:
             return {"error": str(e)}
 
-
+    def _transform_value_to_limits(self, provided_value: float, input_lower_limit: float, input_upper_limit: float, joint_name: str, is_custom: bool = False) -> float:
+        sliders = self.robot_config.custom_sliders if is_custom else self.robot_config.joint_sliders
+        
+        if joint_name not in sliders:
+            return provided_value
+            
+        slider = sliders[joint_name]
+        slider_min, slider_max = slider.min, slider.max
+        
+        if input_upper_limit != input_lower_limit:
+            normalized_position = (provided_value - input_lower_limit) / (input_upper_limit - input_lower_limit)
+            print(normalized_position)
+            transformed_value = slider_min + normalized_position * (slider_max - slider_min)
+            print(transformed_value)
+            return transformed_value
+        else:
+            return (slider_min + slider_max) / 2
 
     async def broadcast_update(self, update_data: Dict[str, Any]):
         """Broadcast updates to all connected clients."""
