@@ -120,9 +120,12 @@ class WebSocketAPIServer:
             custom_joints_info = self.robot_config.get_info(is_custom=True)
             all_joints = {**joints_info, **custom_joints_info}
 
-            await self.broadcast_update(all_joints)
-
-            return all_joints
+            if self.robot_config.get_publish_joints():
+                await self.broadcast_update(all_joints)
+                return all_joints
+            else:
+                await self.broadcast_update({})
+                return {}
 
         except Exception as e:
             return {"error": str(e)}
@@ -148,7 +151,7 @@ class WebSocketAPIServer:
         if not any(self.websockets.values()):
             return
 
-        message = json.dumps({"type": "joint_update", "data": update_data})
+        message = json.dumps(update_data)
 
         for endpoint, clients in self.websockets.items():
             disconnected = set()

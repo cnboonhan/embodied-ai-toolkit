@@ -258,6 +258,7 @@ class RobotConfig:
         self.custom_sliders: Dict[str, viser.GuiInputHandle[float]] = {}
         self.initial_config: List[float] = []
         self.custom_initial_config: List[float] = []
+        self.publish_joints: bool = False 
 
     def add_slider(
         self,
@@ -472,6 +473,14 @@ class RobotConfig:
     def get_change_tolerance(self) -> float:
         """Get the current change tolerance."""
         return self.change_tolerance
+
+    def get_publish_joints(self) -> bool:
+        """Get the current publish joints status."""
+        return self.publish_joints
+
+    def set_publish_joints(self, enabled: bool):
+        """Set the publish joints status."""
+        self.publish_joints = enabled
 
     def update_viser_config(self, config: List[float]):
         """Update the ViserUrdf configuration with URDF joint values only."""

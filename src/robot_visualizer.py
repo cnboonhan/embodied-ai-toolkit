@@ -175,7 +175,7 @@ class RobotVisualizer:
                 "Show collision meshes", self.robot_config.get_viser_urdf().show_collision
             )
             enable_server_cb = self.server.gui.add_checkbox(
-                "Publish Joints", self.enable_server
+                "Publish Joints", self.robot_config.get_publish_joints()
             )
 
             @enable_ik_cb.on_update
@@ -192,7 +192,7 @@ class RobotVisualizer:
 
             @enable_server_cb.on_update
             def _(_):
-                self.enable_server = enable_server_cb.value
+                self.robot_config.set_publish_joints(enable_server_cb.value)
 
         with self.server.gui.add_folder("Settings"):
             tolerance_input = self.server.gui.add_number(
