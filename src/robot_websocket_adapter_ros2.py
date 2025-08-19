@@ -1,4 +1,4 @@
-# websocat --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter.py
+# websocat --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter_ros2.py
 
 import sys
 import time
