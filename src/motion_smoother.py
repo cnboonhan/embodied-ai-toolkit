@@ -38,24 +38,6 @@ def parse_arguments():
         help='Output websocket URL (default: ws://127.0.0.1:5001/ws/smoothed_joints)'
     )
     parser.add_argument(
-        '--smoothing-alpha',
-        type=float,
-        default=0.15,
-        help='Exponential smoothing alpha (0.1-0.3, lower=smother, default: 0.15)'
-    )
-    parser.add_argument(
-        '--max-velocity-rad-s',
-        type=float,
-        default=0.3,
-        help='Maximum joint velocity in rad/s (default: 0.3)'
-    )
-    parser.add_argument(
-        '--max-acceleration-rad-s2',
-        type=float,
-        default=1.0,
-        help='Maximum joint acceleration in rad/s² (default: 1.0)'
-    )
-    parser.add_argument(
         '--output-rate-hz',
         type=float,
         default=30.0,
@@ -63,58 +45,13 @@ def parse_arguments():
     )
     return parser.parse_args()
 
-def generate_smoothed_values(joint_histories, smoothing_params, previous_positions=None, previous_velocities=None, dt=0.033):
-    """Generate smoothed values using exponential smoothing with velocity and acceleration limiting"""
+def generate_smoothed_values(data):
+    """Pass through raw joint values without any processing"""
     smoothed_values = {}
     
-    alpha = smoothing_params['alpha']
-    max_velocity = smoothing_params['max_velocity']
-    max_acceleration = smoothing_params['max_acceleration']
-    
-    for joint_name, history in joint_histories.items():
-        if len(history) > 0:
-            current_raw_value = history[-1]
-            
-            # Get previous smoothed position and velocity
-            prev_position = previous_positions.get(joint_name, current_raw_value)
-            prev_velocity = previous_velocities.get(joint_name, 0.0)
-            
-            # Apply exponential smoothing
-            smoothed_position = alpha * current_raw_value + (1 - alpha) * prev_position
-            
-            # Calculate current velocity
-            current_velocity = (smoothed_position - prev_position) / dt
-            
-            # Limit velocity
-            if abs(current_velocity) > max_velocity:
-                if current_velocity > 0:
-                    current_velocity = max_velocity
-                else:
-                    current_velocity = -max_velocity
-                # Recalculate position based on limited velocity
-                smoothed_position = prev_position + current_velocity * dt
-            
-            # Calculate acceleration
-            current_acceleration = (current_velocity - prev_velocity) / dt
-            
-            # Limit acceleration
-            if abs(current_acceleration) > max_acceleration:
-                if current_acceleration > 0:
-                    current_acceleration = max_acceleration
-                else:
-                    current_acceleration = -max_acceleration
-                # Recalculate velocity and position based on limited acceleration
-                current_velocity = prev_velocity + current_acceleration * dt
-                smoothed_position = prev_position + current_velocity * dt
-            
-            smoothed_values[joint_name] = smoothed_position
-            
-            # Update previous values for next iteration
-            previous_positions[joint_name] = smoothed_position
-            previous_velocities[joint_name] = current_velocity
-            
-        else:
-            smoothed_values[joint_name] = None
+    for joint_name, joint_data in data.items():
+        if isinstance(joint_data, dict) and 'value' in joint_data:
+            smoothed_values[joint_name] = joint_data['value']
     
     return smoothed_values
 
@@ -123,18 +60,6 @@ class MotionSmoother:
         self.args = args
         self.input_ws_url = args.input_ws_url
         self.output_ws_url = args.output_ws_url
-        
-        # Smoothing parameters
-        self.smoothing_params = {
-            'alpha': args.smoothing_alpha,
-            'max_velocity': args.max_velocity_rad_s,
-            'max_acceleration': args.max_acceleration_rad_s2
-        }
-        
-        # Joint history tracking (minimal history for exponential smoothing)
-        self.joint_history = defaultdict(lambda: deque(maxlen=2))  # Only need last few values
-        self.previous_positions = {}
-        self.previous_velocities = {}
         
         # Rate limiting
         self.output_rate = args.output_rate_hz
@@ -152,17 +77,10 @@ class MotionSmoother:
         self.output_ws = None
         self.output_clients = set()
         
-        logger.info(f"Motion Smoother initialized:")
-        logger.info(f"  Input WS: {self.input_ws_url}")
-        logger.info(f"  Output WS: {self.output_ws_url}")
-        logger.info(f"  Smoothing alpha: {self.smoothing_params['alpha']}")
-        logger.info(f"  Max velocity: {self.smoothing_params['max_velocity']} rad/s")
-        logger.info(f"  Max acceleration: {self.smoothing_params['max_acceleration']} rad/s²")
-        logger.info(f"  Output rate: {self.output_rate} Hz")
-
-    def add_to_joint_history(self, joint_name, value):
-        """Add a value to the joint history"""
-        self.joint_history[joint_name].append(value)
+        logger.info(f"Motion smoother initialized with:")
+        logger.info(f"  Input websocket: {args.input_ws_url}")
+        logger.info(f"  Output websocket: {args.output_ws_url}")
+        logger.info(f"  Output rate: {args.output_rate_hz} Hz")
 
     async def start_output_server(self):
         """Start the output websocket server using aiohttp"""
@@ -269,23 +187,19 @@ class MotionSmoother:
             # Extract joint data
             for joint_name, joint_data in data.items():
                 if isinstance(joint_data, dict) and 'value' in joint_data:
-                    self.add_to_joint_history(joint_name, joint_data['value'])
+                    # self.add_to_joint_history(joint_name, joint_data['value']) # Removed as per edit hint
+                    pass # No longer needed
             
             # Check if we have enough history for smoothing (minimal for exponential smoothing)
             min_points_needed = 2  # Just need current and previous value
-            all_joints_ready = all(len(history) >= min_points_needed for history in self.joint_history.values() if len(history) > 0)
+            # all_joints_ready = all(len(history) >= min_points_needed for history in self.joint_history.values() if len(history) > 0) # Removed as per edit hint
+            all_joints_ready = True # Always true now
             
             if all_joints_ready:
                 # Generate smoothed values
-                smoothed_values = generate_smoothed_values(
-                    self.joint_history, 
-                    self.smoothing_params, 
-                    self.previous_positions, 
-                    self.previous_velocities,
-                    dt=self.output_interval
-                )
+                smoothed_values = generate_smoothed_values(data)
                 
-                # Store for rate-limited output
+                # Store for rate-limited broadcasting
                 self.pending_smoothed_values = smoothed_values
                 logger.debug(f"Generated smoothed values: {smoothed_values}")
             else:
@@ -385,10 +299,8 @@ class MotionSmoother:
                 except Exception as e:
                     logger.error(f"Error receiving input message: {e}")
                 
-                # Broadcast smoothed values
                 await self.broadcast_smoothed_values()
                 
-                # Small delay to prevent busy waiting
                 await asyncio.sleep(0.001)
                 
         except KeyboardInterrupt:
