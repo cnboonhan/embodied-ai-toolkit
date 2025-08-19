@@ -41,6 +41,8 @@ class WebSocketAPIServer:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
                     await self.handle_joints_message(ws, msg.data)
+                elif msg.type == WSMsgType.PING:
+                    await ws.pong()
                 elif msg.type == WSMsgType.CLOSE:
                     break
         except Exception as e:

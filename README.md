@@ -16,7 +16,6 @@ uv sync
 uv pip install -e pyroki
 
 # Download and install websocat: https://github.com/vi/websocat/releases
-# Install rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 ## Parameters
