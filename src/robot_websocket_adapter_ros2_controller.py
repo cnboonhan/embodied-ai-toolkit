@@ -1,269 +1,203 @@
-# curl http://127.0.0.1:5000/get_joints
-# x86; aima em stop-app motion_player
+# Robot websocket adapter controller
+# Subscribes to smoothed joint commands and publishes to arm/hand command topics
 
 import rclpy
-import requests
-import json
-import time
-from collections import deque
+import argparse
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 
 
 class JointStateReceiver(Node):
-    def __init__(self):
-        super().__init__("joint_state_receiver")
-        self.server_url = "http://127.0.0.1:5000/get_joints"
-        self.latest_joint_state = None
-        self.joint_names = []
-        self.joint_positions = []
-        self.joint_velocities = []
-        self.joint_efforts = []
+    def __init__(self, smoother_topic, arm_command_topic, hand_command_topic, arm_state_topic, hand_state_topic, max_angle_change_rad):
+        super().__init__("robot_websocket_adapter_ros2_controller")
         
-        # Smoothing configuration - can be overridden by ROS parameters
-        self.declare_parameter('exponential_alpha', 0.1)
-        self.declare_parameter('history_length', 10)
-        self.declare_parameter('change_tolerance', 0.008)
-        self.declare_parameter('max_change_per_step', 0.04)
-        #self.declare_parameter('change_tolerance', 0.22)
-        #self.declare_parameter('max_change_per_step', 0.22)
+        # Initialize joint state variables
+        self.latest_arm_state = None
+        self.latest_hand_state = None
+        self.max_angle_change_rad = max_angle_change_rad
         
-        self.exponential_alpha = self.get_parameter('exponential_alpha').value
-        self.history_length = self.get_parameter('history_length').value
-        self.change_tolerance = self.get_parameter('change_tolerance').value
-        self.max_change_per_step = self.get_parameter('max_change_per_step').value
-        
-        # Smoothing state
-        self.joint_history = {}  # Store smoothed values for each joint
-        self.smoothing_stats = {
-            "total_updates": 0,
-            "total_skipped": 0,
-            "last_update_time": None
-        }
-        self.arm_subscription = self.create_subscription(
+        # Subscribe to smoothed joint commands
+        self.smoother_subscription = self.create_subscription(
             JointState,
-            "/motion/control/arm_joint_state",
-            self.arm_joint_state_callback,
+            smoother_topic,
+            self.smoother_callback,
             10,
         )
-        self.get_logger().info("Subscribed to /motion/control/arm_joint_state")
+        self.get_logger().info(f"Subscribed to {smoother_topic}")
         
-        # Create publisher for joint commands
-        self.joint_command_publisher = self.create_publisher(
+        # Subscribe to current joint states
+        self.arm_state_subscription = self.create_subscription(
             JointState,
-            "/motion/control/arm_joint_command",
+            arm_state_topic,
+            self.arm_state_callback,
             10,
         )
-        self.get_logger().info("Publisher created for /motion/control/arm_joint_command")
+        self.get_logger().info(f"Subscribed to {arm_state_topic}")
         
-        self.timer = self.create_timer(0.01, self.timer_callback)
-        self.get_logger().info("Timer created - will print joint state every 0.01 seconds")
+        self.hand_state_subscription = self.create_subscription(
+            JointState,
+            hand_state_topic,
+            self.hand_state_callback,
+            10,
+        )
+        self.get_logger().info(f"Subscribed to {hand_state_topic}")
         
-        # Log smoothing configuration
-        self.get_logger().info(f"Smoothing configuration:")
-        self.get_logger().info(f"  Exponential alpha: {self.exponential_alpha}")
-        self.get_logger().info(f"  History length: {self.history_length}")
-        self.get_logger().info(f"  Change tolerance: {self.change_tolerance}")
-        self.get_logger().info(f"  Max change per step: {self.max_change_per_step}")
+        # Create publishers for arm and hand commands
+        self.arm_command_publisher = self.create_publisher(
+            JointState,
+            arm_command_topic,
+            10,
+        )
+        self.get_logger().info(f"Publisher created for {arm_command_topic}")
+        
+        self.hand_command_publisher = self.create_publisher(
+            JointState,
+            hand_command_topic,
+            10,
+        )
+        self.get_logger().info(f"Publisher created for {hand_command_topic}")
 
-    def arm_joint_state_callback(self, msg):
+    def arm_state_callback(self, msg):
         """Callback function for arm joint state messages"""
-        # Save the latest joint state
-        self.latest_joint_state = msg
-        self.joint_names = list(msg.name)
-        self.joint_positions = list(msg.position)
-        self.joint_velocities = list(msg.velocity)
-        self.joint_efforts = list(msg.effort)
+        self.latest_arm_state = msg
+        self.get_logger().debug(f"Updated arm state: {msg.name} -> {msg.position}")
 
-    def apply_exponential_smoothing(self, joint_name: str, new_value: float) -> float:
-        """Apply exponential smoothing with extended history for better noise reduction."""
-        if joint_name not in self.joint_history:
-            # Initialize with the new value repeated
-            self.joint_history[joint_name] = [new_value] * self.history_length
-            return new_value
-        
-        # Get the last smoothed value
-        last_smoothed = self.joint_history[joint_name][-1]
-        
-        # Apply exponential smoothing: smoothed = α * new + (1-α) * previous
-        smoothed_value = self.exponential_alpha * new_value + (1 - self.exponential_alpha) * last_smoothed
-        
-        # Store the smoothed value
-        self.joint_history[joint_name].append(smoothed_value)
-        
-        # Keep only the last N values to maintain history length
-        if len(self.joint_history[joint_name]) > self.history_length:
-            self.joint_history[joint_name] = self.joint_history[joint_name][-self.history_length:]
-        
-        return smoothed_value
+    def hand_state_callback(self, msg):
+        """Callback function for hand joint state messages"""
+        self.latest_hand_state = msg
+        self.get_logger().debug(f"Updated hand state: {msg.name} -> {msg.position}")
 
-    def apply_velocity_limiting(self, current_value: float, target_value: float) -> float:
-        """Apply velocity limiting to prevent sudden large changes."""
-        difference = target_value - current_value
+    def limit_angle_change(self, target_position, joint_name, current_state_msg):
+        """Limit the angle change to the maximum allowed value"""
+        if current_state_msg is None:
+            self.get_logger().warning(f"No current state available for {joint_name}, using target position")
+            return target_position
         
-        # Check if change is within tolerance
-        if abs(difference) <= self.change_tolerance:
-            return current_value  # No change needed
+        # Find the current position for this joint
+        current_position = None
+        for i, name in enumerate(current_state_msg.name):
+            if name == joint_name:
+                current_position = current_state_msg.position[i]
+                break
         
-        # Limit the maximum change per step
-        if abs(difference) > self.max_change_per_step:
-            if difference > 0:
-                return current_value + self.max_change_per_step
+        if current_position is None:
+            self.get_logger().warning(f"Joint {joint_name} not found in current state, using target position")
+            return target_position
+        
+        # Calculate the angle difference
+        angle_diff = target_position - current_position
+        
+        # Limit the angle change to the maximum allowed value
+        if abs(angle_diff) > self.max_angle_change_rad:
+            if angle_diff > 0:
+                limited_position = current_position + self.max_angle_change_rad
             else:
-                return current_value - self.max_change_per_step
-        
-        return target_value
-
-    def get_smoothing_stats(self) -> dict:
-        """Get smoothing statistics."""
-        stats = self.smoothing_stats.copy()
-        
-        # Calculate efficiency metrics
-        total_requests = stats["total_updates"] + stats["total_skipped"]
-        if total_requests > 0:
-            stats["update_efficiency"] = stats["total_updates"] / total_requests
-            stats["skip_efficiency"] = stats["total_skipped"] / total_requests
+                limited_position = current_position - self.max_angle_change_rad
+            self.get_logger().info(f"Limited {joint_name} angle change: {angle_diff:.4f} -> {self.max_angle_change_rad:.4f} rad")
+            return limited_position
         else:
-            stats["update_efficiency"] = 0.0
-            stats["skip_efficiency"] = 0.0
-        
-        return stats
+            return target_position
 
-    def reconfigure_smoothing(self, exponential_alpha: float = None, history_length: int = None, 
-                            change_tolerance: float = None, max_change_per_step: float = None):
-        """Reconfigure smoothing parameters dynamically."""
-        if exponential_alpha is not None:
-            self.exponential_alpha = exponential_alpha
-            self.get_logger().info(f"Updated exponential_alpha to {exponential_alpha}")
+    def smoother_callback(self, msg):
+        """Callback function for smoothed joint state messages"""
+        self.get_logger().info(f"Received smoothed joint state: {msg.name} -> {msg.position}")
         
-        if history_length is not None:
-            self.history_length = history_length
-            self.get_logger().info(f"Updated history_length to {history_length}")
+        # Separate arm and hand joints
+        arm_joints = []
+        arm_positions = []
+        hand_joints = []
+        hand_positions = []
         
-        if change_tolerance is not None:
-            self.change_tolerance = change_tolerance
-            self.get_logger().info(f"Updated change_tolerance to {change_tolerance}")
+        for i, joint_name in enumerate(msg.name):
+            # Classify joints based on naming convention:
+            # - arm_joints: prefixed with idx13 to idx26
+            # - hand_joints: prefixed with left_ or right_
+            if joint_name.startswith(('idx13', 'idx14', 'idx15', 'idx16', 'idx17', 'idx18', 
+                                    'idx19', 'idx20', 'idx21', 'idx22', 'idx23', 'idx24', 
+                                    'idx25', 'idx26')):
+                arm_joints.append(joint_name)
+                limited_position = self.limit_angle_change(msg.position[i], joint_name, self.latest_arm_state)
+                arm_positions.append(limited_position)
+            elif joint_name.startswith(('left_', 'right_')):
+                hand_joints.append(joint_name)
+                limited_position = self.limit_angle_change(msg.position[i], joint_name, self.latest_hand_state)
+                hand_positions.append(limited_position)
         
-        if max_change_per_step is not None:
-            self.max_change_per_step = max_change_per_step
-            self.get_logger().info(f"Updated max_change_per_step to {max_change_per_step}")
+        # Publish arm joint commands
+        if arm_joints:
+            arm_msg = JointState()
+            arm_msg.header.stamp = self.get_clock().now().to_msg()
+            arm_msg.name = arm_joints
+            arm_msg.position = arm_positions
+            self.arm_command_publisher.publish(arm_msg)
+            self.get_logger().info(f"Published arm command: {arm_joints} -> {arm_positions}")
         
-        # Clear joint history when parameters change
-        self.joint_history.clear()
-        self.get_logger().info("Cleared joint history due to parameter change")
+        # Publish hand joint commands
+        if hand_joints:
+            hand_msg = JointState()
+            hand_msg.header.stamp = self.get_clock().now().to_msg()
+            hand_msg.name = hand_joints
+            hand_msg.position = hand_positions
+            self.hand_command_publisher.publish(hand_msg)
+            self.get_logger().info(f"Published hand command: {hand_joints} -> {hand_positions}")
 
-    def timer_callback(self):
-        """Timer callback to print the latest joint state message"""
-        try:
-            response = requests.get(self.server_url, timeout=5)
-            response.raise_for_status()
-            json_data = response.json()
-            self.get_logger().info(
-                f"HTTP Response JSON: {json.dumps(json_data, indent=2)}"
-            )
-            
-            # Extract and process all joint values from the response
-            # Create a copy of the latest joint state once before the loop
-            updated_joint_state = None
-            if self.latest_joint_state is not None:
-                updated_joint_state = JointState()
-                updated_joint_state.header = self.latest_joint_state.header
-                updated_joint_state.name = list(self.latest_joint_state.name)
-                updated_joint_state.position = list(self.latest_joint_state.position)
-                updated_joint_state.velocity = list(self.latest_joint_state.velocity)
-                updated_joint_state.effort = list(self.latest_joint_state.effort)
-            
-            for joint_key, joint_data in json_data.items():
-                # Skip joints idx01 to idx12
-                skip_joints = ['idx01', 'idx02', 'idx03', 'idx04', 'idx05', 'idx06', 
-                              'idx07', 'idx08', 'idx09', 'idx10', 'idx11', 'idx12']
-                if any(joint_key.startswith(skip_joint) for skip_joint in skip_joints):
-                    self.get_logger().info(f"Skipping {joint_key} (idx01-idx12)")
-                    continue
-                
-                # Only process joints that start with 'idx13' to 'idx26'
-                idx13_to_26 = ['idx13', 'idx14', 'idx15', 'idx16', 'idx17', 'idx18', 'idx19', 'idx20', 
-                               'idx21', 'idx22', 'idx23', 'idx24', 'idx25', 'idx26']
-                if not any(joint_key.startswith(idx_joint) for idx_joint in idx13_to_26):
-                    self.get_logger().info(f"Skipping {joint_key} (not idx13-idx26)")
-                    continue
-                
-                self.get_logger().info(f"Processing joint: {joint_key}")
-                
-                # Handle case where joint_data might be a dictionary
-                if isinstance(joint_data, dict):
-                    # Try to extract position value from the dictionary
-                    if 'value' in joint_data:
-                        joint_value = joint_data['value']
-                    else:
-                        self.get_logger().error(f"Could not find current value in joint data: {joint_data}")
-                        continue
-                else:
-                    self.get_logger().error(f"Joint data is not a dictionary: {joint_data}")
-                    continue
-                
-                self.get_logger().info(f"Using joint value for {joint_key}: {joint_value}")
-                
-                # Update the joint state if it exists
-                if updated_joint_state is not None:
-                    # Find the index of the joint in the joint names
-                    joint_index = None
-                    for i, name in enumerate(updated_joint_state.name):
-                        if name == joint_key:
-                            joint_index = i
-                            break
-                    
-                    # Update the position value if the joint was found
-                    if joint_index is not None:
-                        current_value = updated_joint_state.position[joint_index]
-                        
-                        # Apply exponential smoothing to reduce noise
-                        smoothed_value = self.apply_exponential_smoothing(joint_key, joint_value)
-                        
-                        # Apply velocity limiting to prevent sudden large changes
-                        final_value = self.apply_velocity_limiting(current_value, smoothed_value)
-                        
-                        # Check if the value actually changed
-                        if abs(final_value - current_value) > self.change_tolerance:
-                            updated_joint_state.position[joint_index] = final_value
-                            self.smoothing_stats["total_updates"] += 1
-                            
-                            # Log detailed smoothing information
-                            self.get_logger().info(f"🔄 {joint_key}: {current_value:.4f} → {smoothed_value:.4f} → {final_value:.4f}")
-                        else:
-                            self.smoothing_stats["total_skipped"] += 1
-                            self.get_logger().debug(f"⏭️ {joint_key}: No significant change ({current_value:.4f} ≈ {final_value:.4f})")
-                    else:
-                        self.get_logger().warning(f"{joint_key} not found in joint names")
-                else:
-                    self.get_logger().info("No joint state available to update")
-            
-            # Update statistics
-            self.smoothing_stats["last_update_time"] = time.time()
-            
-            # Publish the updated joint state to the command topic if we have updates
-            if updated_joint_state is not None:
-                self.joint_command_publisher.publish(updated_joint_state)
-                self.get_logger().info(f"Published updated joint state to /motion/control/arm_joint_command")
-                
-                # Log statistics periodically (every 100 updates)
-                total_requests = self.smoothing_stats["total_updates"] + self.smoothing_stats["total_skipped"]
-                if total_requests > 0 and total_requests % 100 == 0:
-                    stats = self.get_smoothing_stats()
-                    self.get_logger().info(f"📊 Smoothing Stats: {stats['total_updates']} updates, {stats['total_skipped']} skipped, "
-                                          f"Efficiency: {stats['update_efficiency']:.1%}")
-                
-        except requests.exceptions.RequestException as e:
-            self.get_logger().error(f"Failed to make HTTP request: {e}")
-        except json.JSONDecodeError as e:
-            self.get_logger().error(f"Failed to parse JSON response: {e}")
-        except Exception as e:
-            self.get_logger().error(f"Unexpected error in timer callback: {e}")
 
+
+
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Robot websocket adapter controller')
+    parser.add_argument(
+        '--smoother-topic',
+        type=str,
+        default='/joint_command_smoothed',
+        help='ROS topic for smoothed joint commands (default: /joint_command_smoothed)'
+    )
+    parser.add_argument(
+        '--arm-command-topic',
+        type=str,
+        default='/arm_joint_command',
+        help='ROS topic for arm joint commands (default: arm_joint_command)'
+    )
+    parser.add_argument(
+        '--hand-command-topic',
+        type=str,
+        default='/hand_joint_command',
+        help='ROS topic for hand joint commands (default: /motion/control/hand_joint_command)'
+    )
+    parser.add_argument(
+        '--arm-state-topic',
+        type=str,
+        default='/motion/control/arm_joint_state',
+        help='ROS topic for current arm joint states (default: /motion/control/arm_joint_state)'
+    )
+    parser.add_argument(
+        '--hand-state-topic',
+        type=str,
+        default='/motion/control/hand_joint_state',
+        help='ROS topic for current hand joint states (default: /motion/control/hand_joint_state)'
+    )
+    parser.add_argument(
+        '--max-angle-change-rad',
+        type=float,
+        default=0.01,
+        help='Maximum allowed angle change in radians per command (default: 0.01)'
+    )
+    return parser.parse_args()
 
 def main(args=None):
+    # Parse command line arguments
+    cli_args = parse_arguments()
+    
     rclpy.init(args=args)
-    node = JointStateReceiver()
+    node = JointStateReceiver(
+        cli_args.smoother_topic, 
+        cli_args.arm_command_topic, 
+        cli_args.hand_command_topic,
+        cli_args.arm_state_topic,
+        cli_args.hand_state_topic,
+        cli_args.max_angle_change_rad
+    )
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
