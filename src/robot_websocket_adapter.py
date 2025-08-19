@@ -8,11 +8,6 @@ from collections import defaultdict, deque
 from ccma import CCMA
 import numpy as np
 
-# ROS imports
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
-
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='Robot websocket adapter with joint history tracking and CCMA smoothing')
@@ -53,18 +48,6 @@ def parse_arguments():
         default=0.95,
         help='CCMA rho parameter for curvature correction (default: 0.95)'
     )
-    parser.add_argument(
-        '--arm-topic',
-        type=str,
-        default='/arm_joint_command',
-        help='ROS topic for arm joint commands (default: /arm_joint_command)'
-    )
-    parser.add_argument(
-        '--hand-topic',
-        type=str,
-        default='/hand_joint_command',
-        help='ROS topic for hand joint commands (default: /hand_joint_command)'
-    )
     return parser.parse_args()
 
 def generate_smoothed_values(joint_histories, ccma_params):
@@ -98,14 +81,6 @@ def main():
     """Main function"""
     args = parse_arguments()
     
-    # Initialize ROS
-    rclpy.init()
-    node = Node('robot_websocket_adapter')
-    
-    # Create publishers
-    arm_publisher = node.create_publisher(JointState, args.arm_topic, 10)
-    hand_publisher = node.create_publisher(JointState, args.hand_topic, 10)
-    
     HISTORY_WINDOW_SIZE = args.window_size
     
     # CCMA parameters
@@ -127,44 +102,6 @@ def main():
     
     def execute_control_command(smoothed_values):
         print(f"Smoothed Values: {smoothed_values}")
-        
-        # Separate arm and hand joints (you may need to adjust these based on your robot's joint names)
-        arm_joints = []
-        arm_positions = []
-        hand_joints = []
-        hand_positions = []
-        
-        for joint_name, value in smoothed_values.items():
-            if value is not None:
-                # Classify joints based on naming convention:
-                # - arm_joints: prefixed with idx13 to idx26
-                # - hand_joints: prefixed with left_ or right_
-                if joint_name.startswith(('idx13', 'idx14', 'idx15', 'idx16', 'idx17', 'idx18', 
-                                        'idx19', 'idx20', 'idx21', 'idx22', 'idx23', 'idx24', 
-                                        'idx25', 'idx26')):
-                    arm_joints.append(joint_name)
-                    arm_positions.append(value)
-                elif joint_name.startswith(('left_', 'right_')):
-                    hand_joints.append(joint_name)
-                    hand_positions.append(value)
-        
-        # Publish arm joint commands
-        if arm_joints:
-            arm_msg = JointState()
-            arm_msg.header.stamp = node.get_clock().now().to_msg()
-            arm_msg.name = arm_joints
-            arm_msg.position = arm_positions
-            arm_publisher.publish(arm_msg)
-            print(f"Published arm command: {arm_joints} -> {arm_positions}")
-        
-        # Publish hand joint commands
-        if hand_joints:
-            hand_msg = JointState()
-            hand_msg.header.stamp = node.get_clock().now().to_msg()
-            hand_msg.name = hand_joints
-            hand_msg.position = hand_positions
-            hand_publisher.publish(hand_msg)
-            print(f"Published hand command: {hand_joints} -> {hand_positions}")
     
     def print_smoothed_values(smoothed_values):
         print("Smoothed Values (CCMA):")
@@ -177,8 +114,6 @@ def main():
     print(f"  History window size: {HISTORY_WINDOW_SIZE}")
     print(f"  CCMA parameters: w_ma={ccma_params['w_ma']}, w_cc={ccma_params['w_cc']}, distrib={ccma_params['distrib']}")
     print(f"  CCMA rho: rho_ma={ccma_params['rho_ma']}, rho_cc={ccma_params['rho_cc']}")
-    print(f"  Arm topic: {args.arm_topic}")
-    print(f"  Hand topic: {args.hand_topic}")
     
     try:
         buff = ''
@@ -224,10 +159,6 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         sys.stdout.flush()
-    finally:
-        # Clean up ROS
-        node.destroy_node()
-        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,5 @@
-# websocat --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter_ros2.py
+# websocat --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter_ros2.py --arm-topic /motion/control/arm_joint_command --hand-topic /motion/control/hand_joint_command
+# websocat --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter_ros2.py 
 
 import sys
 import time
@@ -65,6 +66,24 @@ def parse_arguments():
         default='/hand_joint_command',
         help='ROS topic for hand joint commands (default: /hand_joint_command)'
     )
+    parser.add_argument(
+        '--arm-state-topic',
+        type=str,
+        default='/motion/control/arm_joint_state',
+        help='ROS topic for current arm joint states (default: /motion/control/arm_joint_state)'
+    )
+    parser.add_argument(
+        '--hand-state-topic',
+        type=str,
+        default='/motion/control/hand_joint_state',
+        help='ROS topic for current hand joint states (default: /motion/control/hand_joint_state)'
+    )
+    parser.add_argument(
+        '--maximum-allowed-angle-change-rad',
+        type=float,
+        default=0.01,
+        help='Maximum allowed angle change in radians per command (default: 0.01)'
+    )
     return parser.parse_args()
 
 def generate_smoothed_values(joint_histories, ccma_params):
@@ -106,6 +125,36 @@ def main():
     arm_publisher = node.create_publisher(JointState, args.arm_topic, 10)
     hand_publisher = node.create_publisher(JointState, args.hand_topic, 10)
     
+    # Create subscribers for current joint states
+    current_joint_states = {}
+    current_hand_states = {}
+    
+    def joint_state_callback(msg):
+        """Callback to update current joint states"""
+        for i, joint_name in enumerate(msg.name):
+            if i < len(msg.position):
+                current_joint_states[joint_name] = msg.position[i]
+    
+    def hand_state_callback(msg):
+        """Callback to update current hand joint states"""
+        for i, joint_name in enumerate(msg.name):
+            if i < len(msg.position):
+                current_hand_states[joint_name] = msg.position[i]
+    
+    arm_state_subscriber = node.create_subscription(
+        JointState, 
+        args.arm_state_topic, 
+        joint_state_callback, 
+        10
+    )
+    
+    hand_state_subscriber = node.create_subscription(
+        JointState, 
+        args.hand_state_topic, 
+        hand_state_callback, 
+        10
+    )
+    
     HISTORY_WINDOW_SIZE = args.window_size
     
     # CCMA parameters
@@ -125,6 +174,27 @@ def main():
     def get_joint_history(joint_name):
         return joint_history[joint_name]
     
+    def limit_angle_change(target_position, joint_name, max_change_rad):
+        """Limit the angle change to the maximum allowed value"""
+        if joint_name in current_joint_states:
+            current_position = current_joint_states[joint_name]
+            angle_diff = target_position - current_position
+            
+            # Limit the angle change to the maximum allowed value
+            if abs(angle_diff) > max_change_rad:
+                if angle_diff > 0:
+                    limited_position = current_position + max_change_rad
+                else:
+                    limited_position = current_position - max_change_rad
+                print(f"Limited {joint_name} angle change: {angle_diff:.4f} -> {max_change_rad:.4f} rad")
+                return limited_position
+            else:
+                return target_position
+        else:
+            # If we don't have current state for this joint, return target as is
+            print(f"Warning: No current state for joint {joint_name}, using target position")
+            return target_position
+    
     def execute_control_command(smoothed_values):
         print(f"Smoothed Values: {smoothed_values}")
         
@@ -136,6 +206,9 @@ def main():
         
         for joint_name, value in smoothed_values.items():
             if value is not None:
+                # Apply angle change limiting
+                limited_value = limit_angle_change(value, joint_name, args.maximum_allowed_angle_change_rad)
+                
                 # Classify joints based on naming convention:
                 # - arm_joints: prefixed with idx13 to idx26
                 # - hand_joints: prefixed with left_ or right_
@@ -143,10 +216,10 @@ def main():
                                         'idx19', 'idx20', 'idx21', 'idx22', 'idx23', 'idx24', 
                                         'idx25', 'idx26')):
                     arm_joints.append(joint_name)
-                    arm_positions.append(value)
+                    arm_positions.append(limited_value)
                 elif joint_name.startswith(('left_', 'right_')):
                     hand_joints.append(joint_name)
-                    hand_positions.append(value)
+                    hand_positions.append(limited_value)
         
         # Publish arm joint commands
         if arm_joints:
@@ -179,6 +252,9 @@ def main():
     print(f"  CCMA rho: rho_ma={ccma_params['rho_ma']}, rho_cc={ccma_params['rho_cc']}")
     print(f"  Arm topic: {args.arm_topic}")
     print(f"  Hand topic: {args.hand_topic}")
+    print(f"  Arm state topic: {args.arm_state_topic}")
+    print(f"  Hand state topic: {args.hand_state_topic}")
+    print(f"  Maximum allowed angle change: {args.maximum_allowed_angle_change_rad} rad")
     
     try:
         buff = ''
