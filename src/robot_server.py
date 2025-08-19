@@ -31,6 +31,8 @@ def main(
         path, vis_port, ik_targets_list, custom_joints_list, change_tolerance, joint_limits_dict, label
     )
     api_server = WebSocketAPIServer(robot_viz.robot_config, api_port)
+    
+    robot_viz.broadcast_callback = api_server.broadcast_update_sync
     websocket_thread = threading.Thread(target=api_server.run, daemon=True)
     websocket_thread.start()
 

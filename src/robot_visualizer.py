@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import asyncio
 from typing import Dict, Any, List
 
 from yourdfpy import URDF
@@ -22,6 +23,7 @@ class RobotVisualizer:
         change_tolerance: float = 0.01,
         joint_limits: Dict[str, tuple] = None,
         label: str | None = None,
+        broadcast_callback=None,
     ):
         self.server = viser.ViserServer(port=port, label=label)
         self.urdf = load_urdf_with_fallback(urdf_path)
@@ -29,7 +31,7 @@ class RobotVisualizer:
         preprocessed_urdf = self._load_urdf_for_pyroki(self.urdf)
         self.robot = pk.Robot.from_urdf(preprocessed_urdf)
         self.robot_config = RobotConfig(change_tolerance=change_tolerance, viser_urdf=self._create_viser_urdf(), custom_joints=custom_joints, joint_limits=joint_limits)
-        self.enable_server = False
+        self.broadcast_callback = broadcast_callback
 
         if end_effectors is None:
             end_effectors = []
@@ -226,6 +228,15 @@ class RobotVisualizer:
         current_config = self.robot_config.get_config(is_custom=False)
         self.ik_solver.update_targets(current_config)
         self.robot_config.update_viser_config(current_config)
+        
+        # Trigger broadcast if callback is available and publishing is enabled
+        if self.broadcast_callback and self.robot_config.get_publish_joints():
+            # Get current joint state for broadcasting
+            joints_info = self.robot_config.get_info(is_custom=False)
+            custom_joints_info = self.robot_config.get_info(is_custom=True)
+            all_joints = {**joints_info, **custom_joints_info}
+            
+            self.broadcast_callback(all_joints)
 
 
 

@@ -164,11 +164,19 @@ class WebSocketAPIServer:
 
             self.websockets[endpoint] -= disconnected
 
+    def broadcast_update_sync(self, update_data: Dict[str, Any]):
+        """Synchronous broadcast method for use from other threads."""
+        if hasattr(self, '_loop') and self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(self.broadcast_update(update_data))
+            )
+
     def run(self):
         """Start the server."""
         logger.info(f"Starting WebSocket API server on {self.host}:{self.port}")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        self._loop = loop  # Store the loop for thread-safe calls
         try:
             loop.run_until_complete(self._run_server())
         finally:

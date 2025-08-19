@@ -73,5 +73,5 @@ echo '{"left_hand": {"value": 0.5}, "right_hand": {"value": 0.0, "limits": [-100
 
 #### Real-time Monitoring
 ```bash
-websocat ws://localhost:5000/ws/update_joints
+websocat --no-close ws://localhost:5000/ws/update_joints
 ```
