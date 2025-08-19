@@ -21,13 +21,13 @@ from yourdfpy import URDF
 def load_urdf_with_fallback(urdf_path: str) -> URDF:
     """
     Load URDF from path if it exists, otherwise try to load from robot_descriptions.
-    
+
     Args:
         urdf_path: Path to URDF file or robot description name
-        
+
     Returns:
         URDF object
-        
+
     Raises:
         FileNotFoundError: If URDF file doesn't exist and robot_descriptions fails
         ValueError: If robot_descriptions name is invalid
@@ -35,8 +35,10 @@ def load_urdf_with_fallback(urdf_path: str) -> URDF:
     # Check if the path exists as a file
     if os.path.isfile(urdf_path):
         print(f"📁 Loading URDF from file: {urdf_path}")
-        return URDF.load(urdf_path, load_collision_meshes=True, build_collision_scene_graph=True)
-    
+        return URDF.load(
+            urdf_path, load_collision_meshes=True, build_collision_scene_graph=True
+        )
+
     # If not a file or directory, try robot_descriptions
     print(f"🤖 Attempting to load from robot_descriptions: {urdf_path}")
     try:
@@ -45,6 +47,7 @@ def load_urdf_with_fallback(urdf_path: str) -> URDF:
         raise FileNotFoundError(
             f"URDF path '{urdf_path}' not found as file/directory and failed to load from robot_descriptions: {e}"
         )
+
 
 def parse_custom_joints(
     custom_joints_str: str | None,
@@ -57,7 +60,7 @@ def parse_custom_joints(
 
     Returns:
         List of (joint_name, lower_limit, upper_limit) tuples, or None if no custom joints
-        
+
     Raises:
         ValueError: If the input format is invalid or contains invalid numeric values
     """
@@ -71,11 +74,11 @@ def parse_custom_joints(
             raise ValueError(
                 f"Invalid custom joint format '{joint_spec}', expected 'name:lower:upper'"
             )
-        
+
         joint_name = parts[0].strip()
         if not joint_name:
             raise ValueError(f"Empty joint name in '{joint_spec}'")
-            
+
         try:
             lower_limit = float(parts[1].strip())
             upper_limit = float(parts[2].strip())
@@ -83,12 +86,12 @@ def parse_custom_joints(
             raise ValueError(
                 f"Invalid numeric limits for custom joint '{joint_name}': {e}"
             )
-            
+
         if lower_limit >= upper_limit:
             raise ValueError(
                 f"Invalid limits for custom joint '{joint_name}': lower limit ({lower_limit}) must be less than upper limit ({upper_limit})"
             )
-            
+
         custom_joints_list.append((joint_name, lower_limit, upper_limit))
 
     return custom_joints_list if custom_joints_list else None
@@ -105,7 +108,7 @@ def parse_joint_limits(
 
     Returns:
         Dictionary mapping joint names to (lower_limit, upper_limit) tuples, or None if no joint limits
-        
+
     Raises:
         ValueError: If the input format is invalid or contains invalid numeric values
     """
@@ -119,27 +122,25 @@ def parse_joint_limits(
             raise ValueError(
                 f"Invalid joint limit format '{joint_spec}', expected 'name:lower:upper'"
             )
-        
+
         joint_name = parts[0].strip()
         if not joint_name:
             raise ValueError(f"Empty joint name in '{joint_spec}'")
-            
+
         try:
             lower_limit = float(parts[1].strip())
             upper_limit = float(parts[2].strip())
         except ValueError as e:
-            raise ValueError(
-                f"Invalid numeric limits for joint '{joint_name}': {e}"
-            )
-            
+            raise ValueError(f"Invalid numeric limits for joint '{joint_name}': {e}")
+
         if lower_limit >= upper_limit:
             raise ValueError(
                 f"Invalid limits for joint '{joint_name}': lower limit ({lower_limit}) must be less than upper limit ({upper_limit})"
             )
-            
+
         if joint_name in joint_limits_dict:
             raise ValueError(f"Duplicate joint name '{joint_name}' in joint limits")
-            
+
         joint_limits_dict[joint_name] = (lower_limit, upper_limit)
 
     return joint_limits_dict if joint_limits_dict else None
@@ -227,9 +228,6 @@ def _solve_ik_jax(
     return sol[JointVar(0)]
 
 
-
-
-
 class RobotConfig:
     """Manages robot joint configuration, including sliders, limits, and update logic."""
 
@@ -258,7 +256,7 @@ class RobotConfig:
         self.custom_sliders: Dict[str, viser.GuiInputHandle[float]] = {}
         self.initial_config: List[float] = []
         self.custom_initial_config: List[float] = []
-        self.publish_joints: bool = False 
+        self.publish_joints: bool = False
 
     def add_slider(
         self,
@@ -457,8 +455,6 @@ class RobotConfig:
             }
         return info
 
-
-
     def get_sliders(
         self, is_custom: bool = False
     ) -> Dict[str, viser.GuiInputHandle[float]]:
@@ -562,7 +558,9 @@ class IKSolver:
         self.ik_targets: List[Any] = [None] * len(target_link_names)
         self.enabled = len(target_link_names) > 0
 
-    def initialize_targets(self, server, current_config: List[float], on_target_moved_callback=None):
+    def initialize_targets(
+        self, server, current_config: List[float], on_target_moved_callback=None
+    ):
         """
         Initialize IK targets in the viser scene.
 
@@ -592,7 +590,7 @@ class IKSolver:
                     position=position,
                     wxyz=tuple(quaternion),
                 )
-                
+
                 # Add movement callback if provided
                 if on_target_moved_callback is not None:
                     self.ik_targets[i].on_update(on_target_moved_callback)
@@ -673,30 +671,29 @@ class IKSolver:
         """Get the list of target link names."""
         return self.target_link_names.copy()
 
+
 def apply_joint_reversal_from_limits(joint_value: float, limits: list) -> float:
     """
     Apply joint value reversal using limits array format.
-    
+
     Args:
         joint_value: The original joint value to reverse
         limits: List containing [lower_limit, upper_limit]
-        
+
     Returns:
         The reversed joint value mirrored around the limits midpoint
-        
+
     Raises:
         ValueError: If limits list doesn't have at least 2 elements
     """
     if len(limits) < 2:
         raise ValueError("Limits array must have at least 2 elements [lower, upper]")
-    
+
     lower_limit = limits[0]
     upper_limit = limits[1]
-    
+
     # Mirror the value around the midpoint of joint limits
     midpoint = (lower_limit + upper_limit) / 2
     distance_from_midpoint = joint_value - midpoint
     reversed_value = midpoint - distance_from_midpoint
     return reversed_value
-
-
