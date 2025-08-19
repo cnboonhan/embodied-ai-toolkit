@@ -48,6 +48,12 @@ def parse_arguments():
         default=0.95,
         help='CCMA rho parameter for curvature correction (default: 0.95)'
     )
+    parser.add_argument(
+        '--max-output-rate',
+        type=float,
+        default=10.0,
+        help='Maximum output rate in Hz (default: 10.0)'
+    )
     return parser.parse_args()
 
 def generate_smoothed_values(joint_histories, ccma_params):
@@ -82,6 +88,8 @@ def main():
     args = parse_arguments()
     
     HISTORY_WINDOW_SIZE = args.window_size
+    MAX_OUTPUT_RATE = args.max_output_rate
+    OUTPUT_INTERVAL = 1.0 / MAX_OUTPUT_RATE
     
     # CCMA parameters
     ccma_params = {
@@ -93,6 +101,11 @@ def main():
     }
     
     joint_history = defaultdict(lambda: deque(maxlen=HISTORY_WINDOW_SIZE))
+    
+    # Rate limiting variables
+    last_output_time = 0.0
+    pending_smoothed_values = None
+    output_count = 0
     
     def add_to_joint_history(joint_name, value):
         joint_history[joint_name].append(value)
@@ -114,10 +127,21 @@ def main():
     print(f"  History window size: {HISTORY_WINDOW_SIZE}")
     print(f"  CCMA parameters: w_ma={ccma_params['w_ma']}, w_cc={ccma_params['w_cc']}, distrib={ccma_params['distrib']}")
     print(f"  CCMA rho: rho_ma={ccma_params['rho_ma']}, rho_cc={ccma_params['rho_cc']}")
+    print(f"  Max output rate: {MAX_OUTPUT_RATE} Hz (interval: {OUTPUT_INTERVAL*1000:.1f} ms)")
     
     try:
         buff = ''
         while True:
+            current_time = time.time()
+            
+            # Check if it's time to output
+            if current_time - last_output_time >= OUTPUT_INTERVAL and pending_smoothed_values is not None:
+                print_smoothed_values(pending_smoothed_values)
+                output_count += 1
+                if output_count % 50 == 0:  # Log every 50 outputs
+                    print(f"📊 Output {output_count} messages at {MAX_OUTPUT_RATE} Hz")
+                last_output_time = current_time
+            
             char = sys.stdin.read(1)
             if not char:
                 break
@@ -141,7 +165,7 @@ def main():
                     
                     if all_joints_ready:
                         smoothed_values = generate_smoothed_values(joint_history, ccma_params)
-                        execute_control_command(smoothed_values)
+                        pending_smoothed_values = smoothed_values  # Store for rate-limited output
                     else:
                         # Print current history lengths for debugging
                         print("Waiting for all joints to reach minimum history length...")

@@ -1,5 +1,6 @@
 # Robot websocket adapter controller
 # Subscribes to smoothed joint commands and publishes to arm/hand command topics
+# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command
 
 import rclpy
 import argparse
@@ -8,20 +9,31 @@ from sensor_msgs.msg import JointState
 
 
 class JointStateReceiver(Node):
-    def __init__(self, smoother_topic, arm_command_topic, hand_command_topic, arm_state_topic, hand_state_topic, max_angle_change_rad):
+    def __init__(self, smoother_topic, arm_command_topic, hand_command_topic, arm_state_topic, hand_state_topic, 
+                 max_position_change_rad):
         super().__init__("robot_websocket_adapter_ros2_controller")
         
-        # Initialize joint state variables
-        self.latest_arm_state = None
-        self.latest_hand_state = None
-        self.max_angle_change_rad = max_angle_change_rad
+        # Initialize joint state variables - track position, velocity, and effort
+        self.latest_arm_state = {
+            'position': {},
+            'velocity': {},
+            'effort': {}
+        }
+        self.latest_hand_state = {
+            'position': {},
+            'velocity': {},
+            'effort': {}
+        }
+        
+        # Change limiting parameters
+        self.max_position_change_rad = max_position_change_rad
         
         # Subscribe to smoothed joint commands
         self.smoother_subscription = self.create_subscription(
             JointState,
             smoother_topic,
             self.smoother_callback,
-            10,
+            1,
         )
         self.get_logger().info(f"Subscribed to {smoother_topic}")
         
@@ -30,7 +42,7 @@ class JointStateReceiver(Node):
             JointState,
             arm_state_topic,
             self.arm_state_callback,
-            10,
+            1,
         )
         self.get_logger().info(f"Subscribed to {arm_state_topic}")
         
@@ -59,54 +71,89 @@ class JointStateReceiver(Node):
 
     def arm_state_callback(self, msg):
         """Callback function for arm joint state messages"""
-        self.latest_arm_state = msg
-        self.get_logger().debug(f"Updated arm state: {msg.name} -> {msg.position}")
+        # Update position, velocity, and effort for each joint
+        for i, name in enumerate(msg.name):
+            # Update position
+            if i < len(msg.position):
+                self.latest_arm_state['position'][name] = msg.position[i]
+            
+            # Update velocity
+            if i < len(msg.velocity):
+                self.latest_arm_state['velocity'][name] = msg.velocity[i]
+            
+            # Update effort
+            if i < len(msg.effort):
+                self.latest_arm_state['effort'][name] = msg.effort[i]
+        
+        self.get_logger().debug(f"Updated arm state: {self.latest_arm_state}")
 
     def hand_state_callback(self, msg):
         """Callback function for hand joint state messages"""
-        self.latest_hand_state = msg
-        self.get_logger().debug(f"Updated hand state: {msg.name} -> {msg.position}")
+        # Update position, velocity, and effort for each joint
+        for i, name in enumerate(msg.name):
+            # Update position
+            if i < len(msg.position):
+                self.latest_hand_state['position'][name] = msg.position[i]
+            
+            # Update velocity
+            if i < len(msg.velocity):
+                self.latest_hand_state['velocity'][name] = msg.velocity[i]
+            
+            # Update effort
+            if i < len(msg.effort):
+                self.latest_hand_state['effort'][name] = msg.effort[i]
+        
+        self.get_logger().debug(f"Updated hand state: {self.latest_hand_state}")
 
-    def limit_angle_change(self, target_position, joint_name, current_state_msg):
-        """Limit the angle change to the maximum allowed value"""
-        if current_state_msg is None:
-            self.get_logger().warning(f"No current state available for {joint_name}, using target position")
-            return target_position
+    def limit_change(self, target_value, current_value, max_change, value_type, joint_name):
+        """Limit the change to the maximum allowed value for any dimension"""
+        if current_value is None:
+            self.get_logger().warning(f"No current {value_type} available for {joint_name}, using target value")
+            return target_value
         
-        # Find the current position for this joint
-        current_position = None
-        for i, name in enumerate(current_state_msg.name):
-            if name == joint_name:
-                current_position = current_state_msg.position[i]
-                break
+        # Calculate the difference
+        value_diff = target_value - current_value
         
-        if current_position is None:
-            self.get_logger().warning(f"Joint {joint_name} not found in current state, using target position")
-            return target_position
-        
-        # Calculate the angle difference
-        angle_diff = target_position - current_position
-        
-        # Limit the angle change to the maximum allowed value
-        if abs(angle_diff) > self.max_angle_change_rad:
-            if angle_diff > 0:
-                limited_position = current_position + self.max_angle_change_rad
+        # Limit the change to the maximum allowed value
+        if abs(value_diff) > max_change:
+            if value_diff > 0:
+                limited_value = current_value + max_change
             else:
-                limited_position = current_position - self.max_angle_change_rad
-            self.get_logger().info(f"Limited {joint_name} angle change: {angle_diff:.4f} -> {self.max_angle_change_rad:.4f} rad")
-            return limited_position
+                limited_value = current_value - max_change
+            self.get_logger().info(f"Limited {joint_name} {value_type} change: {value_diff:.4f} -> {max_change:.4f}")
+            return limited_value
         else:
-            return target_position
+            return target_value
+
+
+
+    def limit_position_change(self, target_position, joint_name, current_state_dict):
+        """Limit the position change to the maximum allowed value"""
+        current_position = current_state_dict.get(joint_name)
+        return self.limit_change(target_position, current_position, self.max_position_change_rad, "position", joint_name)
+
+
 
     def smoother_callback(self, msg):
         """Callback function for smoothed joint state messages"""
-        self.get_logger().info(f"Received smoothed joint state: {msg.name} -> {msg.position}")
+        self.get_logger().info(f"Received smoothed joint state: {msg.name}")
+        if msg.position:
+            self.get_logger().info(f"  Positions: {msg.position}")
+        if msg.velocity:
+            self.get_logger().info(f"  Velocities: {msg.velocity}")
+        if msg.effort:
+            self.get_logger().info(f"  Efforts: {msg.effort}")
         
         # Separate arm and hand joints
         arm_joints = []
         arm_positions = []
+        arm_velocities = []
+        arm_efforts = []
+        
         hand_joints = []
         hand_positions = []
+        hand_velocities = []
+        hand_efforts = []
         
         for i, joint_name in enumerate(msg.name):
             # Classify joints based on naming convention:
@@ -116,32 +163,77 @@ class JointStateReceiver(Node):
                                     'idx19', 'idx20', 'idx21', 'idx22', 'idx23', 'idx24', 
                                     'idx25', 'idx26')):
                 arm_joints.append(joint_name)
-                limited_position = self.limit_angle_change(msg.position[i], joint_name, self.latest_arm_state)
-                arm_positions.append(limited_position)
-            elif joint_name.startswith(('left_', 'right_')):
-                hand_joints.append(joint_name)
-                limited_position = self.limit_angle_change(msg.position[i], joint_name, self.latest_hand_state)
-                hand_positions.append(limited_position)
+                
+                # Limit position change
+                if i < len(msg.position):
+                    limited_position = self.limit_position_change(msg.position[i], joint_name, self.latest_arm_state['position'])
+                    arm_positions.append(limited_position)
+                
+                # Add velocity and effort without limiting
+                if i < len(msg.velocity):
+                    arm_velocities.append(msg.velocity[i])
+                
+                if i < len(msg.effort):
+                    arm_efforts.append(msg.effort[i])
+                    
+            # elif joint_name.startswith(('left_', 'right_')):
+            #     hand_joints.append(joint_name)
+            #     
+            #     # Limit position change
+            #     if i < len(msg.position):
+            #         limited_position = self.limit_position_change(msg.position[i], joint_name, self.latest_hand_state['position'])
+            #         hand_positions.append(limited_position)
+            #     
+            #     # Add velocity and effort without limiting
+            #     if i < len(msg.velocity):
+            #         hand_velocities.append(msg.velocity[i])
+            #     
+            #     if i < len(msg.effort):
+            #         hand_efforts.append(msg.effort[i])
         
         # Publish arm joint commands
         if arm_joints:
             arm_msg = JointState()
             arm_msg.header.stamp = self.get_clock().now().to_msg()
             arm_msg.name = arm_joints
-            arm_msg.position = arm_positions
+            
+            if arm_positions:
+                arm_msg.position = arm_positions
+            if arm_velocities:
+                arm_msg.velocity = arm_velocities
+            if arm_efforts:
+                arm_msg.effort = arm_efforts
+                
             self.arm_command_publisher.publish(arm_msg)
-            self.get_logger().info(f"Published arm command: {arm_joints} -> {arm_positions}")
+            self.get_logger().info(f"Published arm command: {arm_joints}")
+            if arm_positions:
+                self.get_logger().info(f"  Positions: {arm_positions}")
+            if arm_velocities:
+                self.get_logger().info(f"  Velocities: {arm_velocities}")
+            if arm_efforts:
+                self.get_logger().info(f"  Efforts: {arm_efforts}")
         
         # Publish hand joint commands
         if hand_joints:
             hand_msg = JointState()
             hand_msg.header.stamp = self.get_clock().now().to_msg()
             hand_msg.name = hand_joints
-            hand_msg.position = hand_positions
+            
+            if hand_positions:
+                hand_msg.position = hand_positions
+            if hand_velocities:
+                hand_msg.velocity = hand_velocities
+            if hand_efforts:
+                hand_msg.effort = hand_efforts
+                
             self.hand_command_publisher.publish(hand_msg)
-            self.get_logger().info(f"Published hand command: {hand_joints} -> {hand_positions}")
-
-
+            self.get_logger().info(f"Published hand command: {hand_joints}")
+            if hand_positions:
+                self.get_logger().info(f"  Positions: {hand_positions}")
+            if hand_velocities:
+                self.get_logger().info(f"  Velocities: {hand_velocities}")
+            if hand_efforts:
+                self.get_logger().info(f"  Efforts: {hand_efforts}")
 
 
 def parse_arguments():
@@ -178,11 +270,12 @@ def parse_arguments():
         help='ROS topic for current hand joint states (default: /motion/control/hand_joint_state)'
     )
     parser.add_argument(
-        '--max-angle-change-rad',
+        '--max-position-change-rad',
         type=float,
-        default=0.01,
-        help='Maximum allowed angle change in radians per command (default: 0.01)'
+        default=0.005,  # Reduced from 0.01 to 0.005 for smoother motion
+        help='Maximum allowed position change in radians per command (default: 0.005)'
     )
+
     return parser.parse_args()
 
 def main(args=None):
@@ -196,7 +289,7 @@ def main(args=None):
         cli_args.hand_command_topic,
         cli_args.arm_state_topic,
         cli_args.hand_state_topic,
-        cli_args.max_angle_change_rad
+        cli_args.max_position_change_rad
     )
     rclpy.spin(node)
     node.destroy_node()
