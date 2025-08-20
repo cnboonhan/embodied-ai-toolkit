@@ -136,7 +136,7 @@ class RobotVisualizer:
                     label=joint_name,
                     min=lower,
                     max=upper,
-                    step=1e-3,
+                    step=0.01,
                     initial_value=initial_pos,
                 )
                 slider.on_update(lambda _: self._update_robot_config())

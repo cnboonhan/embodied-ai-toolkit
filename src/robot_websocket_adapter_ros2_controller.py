@@ -1,5 +1,6 @@
 # Robot websocket adapter controller
 # Subscribes to smoothed joint commands and publishes to arm/hand command topics
+# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 0.01 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.4
 # python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 1 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.4
 
 import rclpy
