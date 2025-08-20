@@ -423,6 +423,7 @@ class RobotConfig:
         """
         results = {}
         updated_values = []
+        is_updated = False
 
         for name, value in values.items():
             result = self.update_value(name, value, is_custom=is_custom)
@@ -430,19 +431,14 @@ class RobotConfig:
 
             if result.get("updated", False):
                 updated_values.append(name)
+                is_updated = True
 
         # Update viser configuration if any URDF joints were updated
         if not is_custom and updated_values:
             current_config = self.get_config(is_custom=False)
             self.update_viser_config(current_config)
 
-        return {
-            "success": all(result.get("success", False) for result in results.values()),
-            "results": results,
-            (
-                "updated_joints" if not is_custom else "updated_custom_joints"
-            ): updated_values,
-        }
+        return is_updated
 
     def get_info(self, is_custom: bool = False) -> Dict[str, Any]:
         """Get information about all joints or custom controls."""

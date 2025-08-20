@@ -1,4 +1,4 @@
-# websocat --no-close ws://localhost:5001/ws/smoothed_joints | python3 src/robot_websocket_adapter_ros2_smoother.py 
+# websocat --udp-server-buffer-size  1000  --no-close ws://localhost:5000/ws/update_joints | python3 src/robot_websocket_adapter_ros2_smoother.py  --max-output-rate 70^C
 
 import sys
 import time
@@ -23,7 +23,7 @@ def parse_arguments():
     parser.add_argument(
         '--max-output-rate',
         type=float,
-        default=20.0,
+        default=100.0,
         help='Maximum output rate in Hz (default: 20.0)'
     )
     return parser.parse_args()

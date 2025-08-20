@@ -96,7 +96,7 @@ class RobotVisualizer:
         joint_values = {joint_names[i]: solution[i] for i in range(len(solution))}
         result = self.robot_config.update_multiple_values(joint_values, is_custom=False)
         
-        if not result["success"]:
+        if not result:
             print("⚠️  IK solution applied with some issues.")
 
     def _create_viser_urdf(self) -> ViserUrdf:

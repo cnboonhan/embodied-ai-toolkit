@@ -31,11 +31,10 @@ class WebSocketAPIServer:
         """Handle joint update WebSocket connections."""
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-
+        
+        print(f"🔌 New WebSocket connection established")
         self.websockets["update_joints"].add(ws)
-        logger.info(
-            f"Update Joints WebSocket connected. Total: {len(self.websockets['update_joints'])}"
-        )
+        print(f"📊 Total connected clients: {len(self.websockets['update_joints'])}")
 
         try:
             async for msg in ws:
@@ -47,8 +46,10 @@ class WebSocketAPIServer:
                     break
         except Exception as e:
             logger.error(f"Joints WebSocket error: {e}")
+            print(f"❌ WebSocket error: {e}")
         finally:
             self.websockets["update_joints"].discard(ws)
+            print(f"🔌 WebSocket disconnected. Total clients: {len(self.websockets['update_joints'])}")
             logger.info(
                 f"Update Joints WebSocket disconnected. Total: {len(self.websockets['update_joints'])}"
             )
@@ -112,20 +113,21 @@ class WebSocketAPIServer:
                     return {"error": f"Invalid data format for joint {joint_name}"}
 
             if joint_values:
-                self.robot_config.update_multiple_values(joint_values, is_custom=False)
+                joint_is_updated = self.robot_config.update_multiple_values(joint_values, is_custom=False)
             if custom_values:
-                self.robot_config.update_multiple_values(custom_values, is_custom=True)
+                custom_is_updated = self.robot_config.update_multiple_values(custom_values, is_custom=True)
 
             joints_info = self.robot_config.get_info(is_custom=False)
             custom_joints_info = self.robot_config.get_info(is_custom=True)
             all_joints = {**joints_info, **custom_joints_info}
 
-            if self.robot_config.get_publish_joints():
-                await self.broadcast_update(all_joints)
-                return all_joints
-            else:
-                await self.broadcast_update({})
-                return {}
+            if joint_is_updated or custom_is_updated:
+                if self.robot_config.get_publish_joints():
+                    await self.broadcast_update(all_joints)
+                    return all_joints
+                else:
+                    # await self.broadcast_update({})
+                    return {}
 
         except Exception as e:
             return {"error": str(e)}
@@ -166,6 +168,7 @@ class WebSocketAPIServer:
 
     def broadcast_update_sync(self, update_data: Dict[str, Any]):
         """Synchronous broadcast method for use from other threads."""
+        # Schedule the broadcast in the WebSocket server's event loop
         if hasattr(self, '_loop') and self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(self.broadcast_update(update_data))

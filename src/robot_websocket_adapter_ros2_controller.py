@@ -1,16 +1,17 @@
 # Robot websocket adapter controller
 # Subscribes to smoothed joint commands and publishes to arm/hand command topics
-# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command
+# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 1 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.4
 
 import rclpy
 import argparse
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+import time
 
 
 class JointStateReceiver(Node):
     def __init__(self, smoother_topic, arm_command_topic, hand_command_topic, arm_state_topic, hand_state_topic, 
-                 max_position_change_rad):
+                 max_position_change_rad, velocity_scale, min_velocity_rad_s, max_velocity_rad_s, smoothing_alpha):
         super().__init__("robot_websocket_adapter_ros2_controller")
         
         # Initialize joint state variables - track position, velocity, and effort
@@ -28,6 +29,16 @@ class JointStateReceiver(Node):
         # Change limiting parameters
         self.max_position_change_rad = max_position_change_rad
         
+        # Velocity generation parameters
+        self.velocity_scale = velocity_scale
+        self.min_velocity_rad_s = min_velocity_rad_s
+        self.max_velocity_rad_s = max_velocity_rad_s
+        self.previous_positions = {}  # Track previous positions for velocity calculation
+        
+        # Exponential smoothing parameters
+        self.smoothing_alpha = smoothing_alpha
+        self.smoothed_positions = {}  # Track smoothed positions for each joint
+        
         # Subscribe to smoothed joint commands
         self.smoother_subscription = self.create_subscription(
             JointState,
@@ -35,7 +46,6 @@ class JointStateReceiver(Node):
             self.smoother_callback,
             1,
         )
-        self.get_logger().info(f"Subscribed to {smoother_topic}")
         
         # Subscribe to current joint states
         self.arm_state_subscription = self.create_subscription(
@@ -44,30 +54,26 @@ class JointStateReceiver(Node):
             self.arm_state_callback,
             1,
         )
-        self.get_logger().info(f"Subscribed to {arm_state_topic}")
         
         self.hand_state_subscription = self.create_subscription(
             JointState,
             hand_state_topic,
             self.hand_state_callback,
-            10,
+            1,
         )
-        self.get_logger().info(f"Subscribed to {hand_state_topic}")
         
         # Create publishers for arm and hand commands
         self.arm_command_publisher = self.create_publisher(
             JointState,
             arm_command_topic,
-            10,
+            1,
         )
-        self.get_logger().info(f"Publisher created for {arm_command_topic}")
         
         self.hand_command_publisher = self.create_publisher(
             JointState,
             hand_command_topic,
             10,
         )
-        self.get_logger().info(f"Publisher created for {hand_command_topic}")
 
     def arm_state_callback(self, msg):
         """Callback function for arm joint state messages"""
@@ -84,8 +90,6 @@ class JointStateReceiver(Node):
             # Update effort
             if i < len(msg.effort):
                 self.latest_arm_state['effort'][name] = msg.effort[i]
-        
-        self.get_logger().debug(f"Updated arm state: {self.latest_arm_state}")
 
     def hand_state_callback(self, msg):
         """Callback function for hand joint state messages"""
@@ -102,13 +106,10 @@ class JointStateReceiver(Node):
             # Update effort
             if i < len(msg.effort):
                 self.latest_hand_state['effort'][name] = msg.effort[i]
-        
-        self.get_logger().debug(f"Updated hand state: {self.latest_hand_state}")
 
     def limit_change(self, target_value, current_value, max_change, value_type, joint_name):
         """Limit the change to the maximum allowed value for any dimension"""
         if current_value is None:
-            self.get_logger().warning(f"No current {value_type} available for {joint_name}, using target value")
             return target_value
         
         # Calculate the difference
@@ -120,7 +121,6 @@ class JointStateReceiver(Node):
                 limited_value = current_value + max_change
             else:
                 limited_value = current_value - max_change
-            self.get_logger().info(f"Limited {joint_name} {value_type} change: {value_diff:.4f} -> {max_change:.4f}")
             return limited_value
         else:
             return target_value
@@ -128,21 +128,63 @@ class JointStateReceiver(Node):
 
 
     def limit_position_change(self, target_position, joint_name, current_state_dict):
-        """Limit the position change to the maximum allowed value"""
+        """Limit the position change to the maximum allowed value for any dimension"""
         current_position = current_state_dict.get(joint_name)
-        return self.limit_change(target_position, current_position, self.max_position_change_rad, "position", joint_name)
+        if current_position is None:
+            return target_position
+        
+        # Calculate the difference
+        position_diff = target_position - current_position
+        
+        # If change exceeds limit, use the previous value instead
+        if abs(position_diff) > self.max_position_change_rad:
+            return current_position
+        else:
+            return target_position
+    
+    def apply_exponential_smoothing(self, new_position, joint_name):
+        """Apply exponential smoothing to joint position"""
+        # Get previous smoothed position
+        previous_smoothed = self.smoothed_positions.get(joint_name, new_position)
+        
+        # Apply exponential smoothing: smoothed = alpha * new + (1 - alpha) * previous
+        smoothed_position = self.smoothing_alpha * new_position + (1 - self.smoothing_alpha) * previous_smoothed
+        
+        # Store smoothed position for next iteration
+        self.smoothed_positions[joint_name] = smoothed_position
+        
+        return smoothed_position
 
+
+    def generate_smooth_velocity(self, target_position, joint_name, current_state_dict, dt=0.033):
+        """Generate smooth velocity command to prevent sudden stops"""
+        current_position = current_state_dict.get(joint_name)
+        if current_position is None:
+            return 0.0
+        
+        # Calculate position error
+        position_error = target_position - current_position
+        
+        # Calculate desired velocity based on position error
+        desired_velocity = position_error * self.velocity_scale
+        
+        # Limit velocity to prevent sudden stops and excessive speed
+        if abs(desired_velocity) < self.min_velocity_rad_s:
+            # If velocity is too low but we're not at target, maintain minimum velocity
+            if abs(position_error) > 0.001:  # Small threshold to prevent oscillation
+                desired_velocity = self.min_velocity_rad_s if desired_velocity >= 0 else -self.min_velocity_rad_s
+            else:
+                # Very close to target, reduce velocity gradually
+                desired_velocity = desired_velocity * 0.1
+        
+        # Apply maximum velocity limit
+        if abs(desired_velocity) > self.max_velocity_rad_s:
+            desired_velocity = self.max_velocity_rad_s if desired_velocity > 0 else -self.max_velocity_rad_s
+        
+        return desired_velocity
 
 
     def smoother_callback(self, msg):
-        """Callback function for smoothed joint state messages"""
-        self.get_logger().info(f"Received smoothed joint state: {msg.name}")
-        if msg.position:
-            self.get_logger().info(f"  Positions: {msg.position}")
-        if msg.velocity:
-            self.get_logger().info(f"  Velocities: {msg.velocity}")
-        if msg.effort:
-            self.get_logger().info(f"  Efforts: {msg.effort}")
         
         # Separate arm and hand joints
         arm_joints = []
@@ -166,13 +208,18 @@ class JointStateReceiver(Node):
                 
                 # Limit position change
                 if i < len(msg.position):
-                    limited_position = self.limit_position_change(msg.position[i], joint_name, self.latest_arm_state['position'])
+                    # Apply exponential smoothing first
+                    smoothed_position = self.apply_exponential_smoothing(msg.position[i], joint_name)
+                    
+                    # Then apply position change limiting
+                    limited_position = self.limit_position_change(smoothed_position, joint_name, self.latest_arm_state['position'])
                     arm_positions.append(limited_position)
+                    
+                    # Generate smooth velocity command to prevent sudden stops
+                    smooth_velocity = self.generate_smooth_velocity(limited_position, joint_name, self.latest_arm_state['position'])
+                    arm_velocities.append(smooth_velocity)
                 
-                # Add velocity and effort without limiting
-                if i < len(msg.velocity):
-                    arm_velocities.append(msg.velocity[i])
-                
+                # Add effort without limiting (if provided)
                 if i < len(msg.effort):
                     arm_efforts.append(msg.effort[i])
                     
@@ -194,7 +241,18 @@ class JointStateReceiver(Node):
         # Publish arm joint commands
         if arm_joints:
             arm_msg = JointState()
-            arm_msg.header.stamp = self.get_clock().now().to_msg()
+            
+            # Set timestamp using Python time
+            current_time_sec = time.time()
+            current_time_nanosec = int((current_time_sec % 1) * 1e9)
+            current_time_sec_int = int(current_time_sec)
+            
+            from builtin_interfaces.msg import Time
+            timestamp = Time()
+            timestamp.sec = current_time_sec_int
+            timestamp.nanosec = current_time_nanosec
+            arm_msg.header.stamp = timestamp
+            
             arm_msg.name = arm_joints
             
             if arm_positions:
@@ -205,18 +263,22 @@ class JointStateReceiver(Node):
                 arm_msg.effort = arm_efforts
                 
             self.arm_command_publisher.publish(arm_msg)
-            self.get_logger().info(f"Published arm command: {arm_joints}")
-            if arm_positions:
-                self.get_logger().info(f"  Positions: {arm_positions}")
-            if arm_velocities:
-                self.get_logger().info(f"  Velocities: {arm_velocities}")
-            if arm_efforts:
-                self.get_logger().info(f"  Efforts: {arm_efforts}")
         
         # Publish hand joint commands
         if hand_joints:
             hand_msg = JointState()
-            hand_msg.header.stamp = self.get_clock().now().to_msg()
+            
+            # Set timestamp using Python time
+            current_time_sec = time.time()
+            current_time_nanosec = int((current_time_sec % 1) * 1e9)
+            current_time_sec_int = int(current_time_sec)
+            
+            from builtin_interfaces.msg import Time
+            timestamp = Time()
+            timestamp.sec = current_time_sec_int
+            timestamp.nanosec = current_time_nanosec
+            hand_msg.header.stamp = timestamp
+            
             hand_msg.name = hand_joints
             
             if hand_positions:
@@ -227,13 +289,6 @@ class JointStateReceiver(Node):
                 hand_msg.effort = hand_efforts
                 
             self.hand_command_publisher.publish(hand_msg)
-            self.get_logger().info(f"Published hand command: {hand_joints}")
-            if hand_positions:
-                self.get_logger().info(f"  Positions: {hand_positions}")
-            if hand_velocities:
-                self.get_logger().info(f"  Velocities: {hand_velocities}")
-            if hand_efforts:
-                self.get_logger().info(f"  Efforts: {hand_efforts}")
 
 
 def parse_arguments():
@@ -272,10 +327,33 @@ def parse_arguments():
     parser.add_argument(
         '--max-position-change-rad',
         type=float,
-        default=0.005,  # Reduced from 0.01 to 0.005 for smoother motion
-        help='Maximum allowed position change in radians per command (default: 0.005)'
+        default=0.01,
+        help='Maximum allowed position change in radians per command (default: 0.01)'
     )
-
+    parser.add_argument(
+        '--velocity-scale',
+        type=float,
+        default=0.5,
+        help='Velocity scaling factor for smooth motion (default: 0.5)'
+    )
+    parser.add_argument(
+        '--min-velocity-rad-s',
+        type=float,
+        default=0.01,
+        help='Minimum velocity to prevent sudden stops (default: 0.01)'
+    )
+    parser.add_argument(
+        '--max-velocity-rad-s',
+        type=float,
+        default=0.5,
+        help='Maximum velocity limit (default: 0.5)'
+    )
+    parser.add_argument(
+        '--smoothing-alpha',
+        type=float,
+        default=0.3,
+        help='Exponential smoothing alpha (0.1-0.9, lower=smother, default: 0.3)'
+    )
     return parser.parse_args()
 
 def main(args=None):
@@ -289,7 +367,11 @@ def main(args=None):
         cli_args.hand_command_topic,
         cli_args.arm_state_topic,
         cli_args.hand_state_topic,
-        cli_args.max_position_change_rad
+        cli_args.max_position_change_rad,
+        cli_args.velocity_scale,
+        cli_args.min_velocity_rad_s,
+        cli_args.max_velocity_rad_s,
+        cli_args.smoothing_alpha
     )
     rclpy.spin(node)
     node.destroy_node()
