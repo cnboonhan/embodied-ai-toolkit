@@ -18,7 +18,7 @@ def main(
     ik_targets: str | None = None,
     custom_joints: str | None = None,
     joint_limits: str | None = None,
-    change_tolerance: float = 0.01,
+    change_tolerance: float = 0.045,
     label: str | None = None,
 ) -> None:
     custom_joints_list = parse_custom_joints(custom_joints)

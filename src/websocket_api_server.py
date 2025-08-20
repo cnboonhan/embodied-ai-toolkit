@@ -73,67 +73,97 @@ class WebSocketAPIServer:
             if not isinstance(joints_data, dict):
                 return {"error": "Expected joint data dictionary"}
 
+            # Cache slider lookups to avoid repeated calls
+            regular_sliders = self.robot_config.get_sliders(is_custom=False)
+            custom_sliders = self.robot_config.get_sliders(is_custom=True)
+            
             joint_values = {}
             custom_values = {}
+            has_errors = False
+            error_message = ""
 
             for joint_name, joint_data_item in joints_data.items():
-                if isinstance(joint_data_item, dict) and "value" in joint_data_item:
-                    value = joint_data_item["value"]
-
-                    # Check if limits are provided in the joint data
-                    if "limits" in joint_data_item and isinstance(joint_data_item["limits"], list) and len(joint_data_item["limits"]) == 2:
-                        limits = joint_data_item["limits"]
-                        lower_limit, upper_limit = limits[0], limits[1]
-                        
-                        # Validate limits
-                        if not isinstance(lower_limit, (int, float)) or not isinstance(upper_limit, (int, float)):
-                            return {"error": f"Invalid limit types for joint {joint_name}"}
-                        
-                        if lower_limit >= upper_limit:
-                            return {"error": f"Invalid limits for joint {joint_name}: lower limit must be less than upper limit"}
-                        
-                        # Transform the provided value to fit within the provided limits
-                        if joint_name in self.robot_config.get_sliders(is_custom=False):
-                            transformed_value = self._transform_value_to_limits(value, lower_limit, upper_limit, joint_name, is_custom=False)
-                            joint_values[joint_name] = transformed_value
-                        elif joint_name in self.robot_config.get_sliders(is_custom=True):
-                            transformed_value = self._transform_value_to_limits(value, lower_limit, upper_limit, joint_name, is_custom=True)
-                            custom_values[joint_name] = transformed_value
-                        else:
-                            return {"error": f"Joint '{joint_name}' not found"}
-                    else:
-                        # No limits provided, use existing limits
-                        if joint_name in self.robot_config.get_sliders(is_custom=False):
-                            joint_values[joint_name] = value
-                        elif joint_name in self.robot_config.get_sliders(is_custom=True):
-                            custom_values[joint_name] = value
-                        else:
-                            return {"error": f"Joint '{joint_name}' not found"}
+                # Validate joint data structure
+                if not isinstance(joint_data_item, dict) or "value" not in joint_data_item:
+                    has_errors = True
+                    error_message = f"Invalid data format for joint {joint_name}"
+                    break
+                
+                value = joint_data_item["value"]
+                
+                # Determine if joint is regular or custom
+                is_custom = joint_name in custom_sliders
+                is_regular = joint_name in regular_sliders
+                
+                if not (is_custom or is_regular):
+                    has_errors = True
+                    error_message = f"Joint '{joint_name}' not found"
+                    break
+                
+                # Handle limits if provided
+                if "limits" in joint_data_item and isinstance(joint_data_item["limits"], list) and len(joint_data_item["limits"]) == 2:
+                    limits = joint_data_item["limits"]
+                    lower_limit, upper_limit = limits[0], limits[1]
+                    
+                    # Validate limits
+                    if not isinstance(lower_limit, (int, float)) or not isinstance(upper_limit, (int, float)):
+                        has_errors = True
+                        error_message = f"Invalid limit types for joint {joint_name}"
+                        break
+                    
+                    if lower_limit >= upper_limit:
+                        has_errors = True
+                        error_message = f"Invalid limits for joint {joint_name}: lower limit must be less than upper limit"
+                        break
+                    
+                    # Transform value using cached slider info
+                    transformed_value = self._transform_value_to_limits_cached(
+                        value, lower_limit, upper_limit, joint_name, 
+                        is_custom, regular_sliders, custom_sliders
+                    )
                 else:
-                    return {"error": f"Invalid data format for joint {joint_name}"}
+                    # No limits provided, use value as-is
+                    transformed_value = value
+                
+                # Store in appropriate dictionary
+                if is_custom:
+                    custom_values[joint_name] = transformed_value
+                else:
+                    joint_values[joint_name] = transformed_value
 
+            if has_errors:
+                return {"error": error_message}
+
+            # Update robot configuration
+            joint_is_updated = False
+            custom_is_updated = False
+            
             if joint_values:
                 joint_is_updated = self.robot_config.update_multiple_values(joint_values, is_custom=False)
             if custom_values:
                 custom_is_updated = self.robot_config.update_multiple_values(custom_values, is_custom=True)
 
-            joints_info = self.robot_config.get_info(is_custom=False)
-            custom_joints_info = self.robot_config.get_info(is_custom=True)
-            all_joints = {**joints_info, **custom_joints_info}
-
+            # Only get joint info if we need to broadcast or return
             if joint_is_updated or custom_is_updated:
                 if self.robot_config.get_publish_joints():
+                    joints_info = self.robot_config.get_info(is_custom=False)
+                    custom_joints_info = self.robot_config.get_info(is_custom=True)
+                    all_joints = {**joints_info, **custom_joints_info}
                     await self.broadcast_update(all_joints)
                     return all_joints
                 else:
-                    # await self.broadcast_update({})
                     return {}
+            else:
+                return {}
 
         except Exception as e:
             return {"error": str(e)}
 
-    def _transform_value_to_limits(self, provided_value: float, input_lower_limit: float, input_upper_limit: float, joint_name: str, is_custom: bool = False) -> float:
-        sliders = self.robot_config.custom_sliders if is_custom else self.robot_config.joint_sliders
+    def _transform_value_to_limits_cached(self, provided_value: float, input_lower_limit: float, 
+                                        input_upper_limit: float, joint_name: str, is_custom: bool,
+                                        regular_sliders: Dict, custom_sliders: Dict) -> float:
+        """Optimized version of _transform_value_to_limits using cached slider data."""
+        sliders = custom_sliders if is_custom else regular_sliders
         
         if joint_name not in sliders:
             return provided_value

@@ -1,13 +1,16 @@
 # Robot websocket adapter controller
 # Subscribes to smoothed joint commands and publishes to arm/hand command topics
-# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 0.01 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.4
 # python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 1 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.4
+# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 0.6 --velocity-scale 0.1 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.1
+#  python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 1 --velocity-scale 0.3 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.1
+# python3 src/robot_websocket_adapter_ros2_controller.py --arm-command-topic /motion/control/arm_joint_command  --max-position-change-rad 0.6 --velocity-scale 0.2 --max-velocity-rad-s 0.3 --min-velocity-rad-s 0.02 --smoothing-alpha 0.1
 
 import rclpy
 import argparse
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
 import time
+from builtin_interfaces.msg import Time
 
 
 class JointStateReceiver(Node):
@@ -186,7 +189,6 @@ class JointStateReceiver(Node):
 
 
     def smoother_callback(self, msg):
-        
         # Separate arm and hand joints
         arm_joints = []
         arm_positions = []
@@ -197,6 +199,10 @@ class JointStateReceiver(Node):
         hand_positions = []
         hand_velocities = []
         hand_efforts = []
+        
+        # Track gripper values for hand control
+        left_grip = 0.0
+        right_grip = 0.0
         
         for i, joint_name in enumerate(msg.name):
             # Classify joints based on naming convention:
@@ -224,20 +230,68 @@ class JointStateReceiver(Node):
                 if i < len(msg.effort):
                     arm_efforts.append(msg.effort[i])
                     
-            # elif joint_name.startswith(('left_', 'right_')):
-            #     hand_joints.append(joint_name)
-            #     
-            #     # Limit position change
-            #     if i < len(msg.position):
-            #         limited_position = self.limit_position_change(msg.position[i], joint_name, self.latest_hand_state['position'])
-            #         hand_positions.append(limited_position)
-            #     
-            #     # Add velocity and effort without limiting
-            #     if i < len(msg.velocity):
-            #         hand_velocities.append(msg.velocity[i])
-            #     
-            #     if i < len(msg.effort):
-            #         hand_efforts.append(msg.effort[i])
+            if joint_name.startswith(('left_hand', 'right_hand')):
+                # Extract gripper values (0-1 range)
+                if i < len(msg.position):
+                    if joint_name == 'left_hand':
+                        left_grip = msg.position[i]
+                    elif joint_name == 'right_hand':
+                        right_grip = msg.position[i]
+        
+        # Process hand joints based on gripper values
+        if left_grip > 0.0 or right_grip > 0.0:
+            # Convert gripper values (0-1) to target joint positions
+            # Following the convention: invert thumb proximal pitch joint (1000 - value)
+            # Scale gripper values to appropriate ranges for each joint
+            target_left_thumb_pitch = 1000 - (left_grip * 1000)  # Inverted and scaled
+            target_left_thumb_yaw = left_grip * 1000  # Scaled
+            target_left_index = left_grip * 1000
+            target_left_middle = left_grip * 1000
+            target_left_ring = left_grip * 1000
+            target_left_pinky = left_grip * 1000
+
+            target_right_thumb_pitch = 1000 - (right_grip * 1000)  # Inverted and scaled
+            target_right_thumb_yaw = right_grip * 1000  # Scaled
+            target_right_index = right_grip * 1000
+            target_right_middle = right_grip * 1000
+            target_right_ring = right_grip * 1000
+            target_right_pinky = right_grip * 1000
+
+            # Define hand joint names
+            hand_joints = [
+                "left_thumb_0",
+                "left_thumb_1",
+                "left_index",
+                "left_middle",
+                "left_ring",
+                "left_pinky",
+                "right_thumb_0",
+                "right_thumb_1",
+                "right_index",
+                "right_middle",
+                "right_ring",
+                "right_pinky",
+            ]
+            
+            # Multiply all joint values by 2 before publishing
+            hand_positions = [
+                2 * target_left_thumb_pitch,
+                2 * target_left_thumb_yaw,
+                2 * target_left_index,
+                2 * target_left_middle,
+                2 * target_left_ring,
+                2 * target_left_pinky,
+                2 * target_right_thumb_pitch,
+                2 * target_right_thumb_yaw,
+                2 * target_right_index,
+                2 * target_right_middle,
+                2 * target_right_ring,
+                2 * target_right_pinky,
+            ]
+            
+            # Add empty velocity and effort arrays for hand joints
+            hand_velocities = []
+            hand_efforts = []
         
         # Publish arm joint commands
         if arm_joints:
@@ -248,7 +302,6 @@ class JointStateReceiver(Node):
             current_time_nanosec = int((current_time_sec % 1) * 1e9)
             current_time_sec_int = int(current_time_sec)
             
-            from builtin_interfaces.msg import Time
             timestamp = Time()
             timestamp.sec = current_time_sec_int
             timestamp.nanosec = current_time_nanosec
@@ -274,7 +327,6 @@ class JointStateReceiver(Node):
             current_time_nanosec = int((current_time_sec % 1) * 1e9)
             current_time_sec_int = int(current_time_sec)
             
-            from builtin_interfaces.msg import Time
             timestamp = Time()
             timestamp.sec = current_time_sec_int
             timestamp.nanosec = current_time_nanosec
@@ -374,9 +426,16 @@ def main(args=None):
         cli_args.max_velocity_rad_s,
         cli_args.smoothing_alpha
     )
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
