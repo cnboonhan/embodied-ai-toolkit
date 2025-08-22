@@ -4,8 +4,9 @@ Tools to use for Humanoid Data Collection.
 
 ## Setup
 ```
+apt update
 uv venv -p 3.11
 source .venv/bin/activate
 uv sync
-# download websocat: https://github.com/vi/websocat
+# Install Zenoh CLI: https://github.com/eclipse-zenoh/zenoh
 ```

@@ -2,7 +2,6 @@ from robot_descriptions.loaders.yourdfpy import load_robot_description
 from pathlib import Path
 import yourdfpy
 import asyncio
-import multiprocessing
 import numpy as np
 import viser
 from viser.extras import ViserUrdf
@@ -11,13 +10,14 @@ from typing import List, Optional, Tuple
 import asyncio
 import json
 import threading
-from aiohttp import web, WSMsgType
+
 
 @dataclass
 class CustomJoint:
     name: str
     type: str
     limits: Tuple[float, float]
+
 
 @dataclass
 class Config:
@@ -26,39 +26,42 @@ class Config:
     visualization_port: int
     custom_joints: Optional[List[CustomJoint]] = None
 
+
 def load_config(config_path: Path) -> Config:
     import json
-    
-    with open(config_path, 'r') as f:
+
+    with open(config_path, "r") as f:
         data = json.load(f)
-    
+
     # Convert custom_joints if present
     custom_joints = None
-    if 'custom_joints' in data:
+    if "custom_joints" in data:
         custom_joints = [
             CustomJoint(
-                name=joint['name'],
-                type=joint['type'],
-                limits=tuple(joint['limits'])
+                name=joint["name"], type=joint["type"], limits=tuple(joint["limits"])
             )
-            for joint in data['custom_joints']
+            for joint in data["custom_joints"]
         ]
-    
+
     return Config(
-        urdf_path=data['urdf_path'],
-        api_port=data['api_port'],
-        visualization_port=data['visualization_port'],
-        custom_joints=custom_joints
+        urdf_path=data["urdf_path"],
+        api_port=data["api_port"],
+        visualization_port=data["visualization_port"],
+        custom_joints=custom_joints,
     )
+
 
 def load_urdf(urdf_path: str):
     try:
         if Path(urdf_path).exists():
             return yourdfpy.URDF.load(urdf_path)
-        else: 
+        else:
             return load_robot_description(urdf_path)
     except Exception as e:
-        raise Exception(f"Failed to load URDF from local or robot_descriptions '{urdf_path}'")
+        raise Exception(
+            f"Failed to load URDF from local or robot_descriptions '{urdf_path}'"
+        )
+
 
 def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
     slider_names: list[str] = []
@@ -67,7 +70,10 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
     custom_slider_names: list[str] = []
 
     with server.gui.add_folder("Joint position controls"):
-        for joint_name, (lower,upper,) in robot.get_actuated_joint_limits().items():
+        for joint_name, (
+            lower,
+            upper,
+        ) in robot.get_actuated_joint_limits().items():
             lower = lower if lower is not None else -np.pi
             upper = upper if upper is not None else np.pi
             initial_pos = (lower + upper) / 2.0
@@ -79,7 +85,11 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                 step=1e-3,
                 initial_value=initial_pos,
             )
-            slider.on_update(lambda _, s=slider: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
+            slider.on_update(
+                lambda _, s=slider: robot.update_cfg(
+                    np.array([slider.value for slider in slider_handles])
+                )
+            )
             slider_handles.append(slider)
             slider_names.append(joint_name)
 
@@ -96,177 +106,132 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                     step=1e-3,
                     initial_value=initial_pos,
                 )
-                # slider.on_update(lambda _, s=slider: robot.update_cfg(np.array(np.array([slider.value for slider in slider_handles]))))
                 custom_slider_handles.append(slider)
                 custom_slider_names.append(custom_joint.name)
 
     robot.update_cfg(np.array([slider.value for slider in slider_handles]))
     return slider_handles, slider_names, custom_slider_handles, custom_slider_names
 
-class WebSocketServer:
-    def __init__(self, slider_handles: List[viser.GuiInputHandle[float]], slider_names: List[str], 
-                 custom_slider_handles: List[viser.GuiInputHandle[float]], custom_slider_names: List[str], 
-                 robot: ViserUrdf, port: int = 50051):
+
+class ApiServer:
+    def __init__(
+        self,
+        slider_handles: List[viser.GuiInputHandle[float]],
+        slider_names: List[str],
+        custom_slider_handles: List[viser.GuiInputHandle[float]],
+        custom_slider_names: List[str],
+        robot: ViserUrdf,
+        port: int = 5000,
+    ):
         self.slider_handles = slider_handles
         self.slider_names = slider_names
         self.custom_slider_handles = custom_slider_handles
         self.custom_slider_names = custom_slider_names
         self.robot = robot
         self.port = port
-        self.clients = set()
-        self.joint_subscribers = set() 
-        self.app = web.Application()
-        self.app.router.add_get('/ws', self.websocket_handler)
-        
-    async def broadcast_joint_update(self, joints_to_publish=[], custom_joints_to_publish=[]):
-        """Broadcast current joint values to all subscribers"""
-        if not self.joint_subscribers:
-            return
 
-        joints = {}
-        
-        for joint_name in joints_to_publish:
-            if joint_name in self.slider_names:
-                joint_index = self.slider_names.index(joint_name)
-                joints[joint_name] = self.slider_handles[joint_index].value
-        
-        for joint_name in custom_joints_to_publish:
-            if joint_name in self.custom_slider_names:
-                joint_index = self.custom_slider_names.index(joint_name)
-                joints[joint_name] = self.custom_slider_handles[joint_index].value
-        
-        for ws in self.joint_subscribers.copy():
-            try:
-                await ws.send_json(joints)
-            except Exception as e:
-                print(f"Error broadcasting to client: {e}")
-                self.joint_subscribers.discard(ws)
-                self.clients.discard(ws)
-        
-    async def websocket_handler(self, request):
-        ws = web.WebSocketResponse()
-        await ws.prepare(request)
-        
-        self.clients.add(ws)
-        print(f"WebSocket client connected. Total clients: {len(self.clients)}")
-        
-        try:
-            async for msg in ws:
-                if msg.type == WSMsgType.TEXT:
-                    if msg.data == 'get_joints':
-                        self.joint_subscribers.add(ws)
-                        joints = {}
-                        for i, joint_name in enumerate(self.slider_names):
-                            joints[joint_name] = self.slider_handles[i].value
-                        for i, joint_name in enumerate(self.custom_slider_names):
-                            joints[joint_name] = self.custom_slider_handles[i].value
-                        await ws.send_json(joints)
-                        
-                    elif msg.data == 'get_limits':
-                        limits = {}
-                        for i, slider in enumerate(self.slider_handles):
-                            limits[self.slider_names[i]] = {
-                                'lower': slider.min,
-                                'upper': slider.max
-                            }
-                        for i, slider in enumerate(self.custom_slider_handles):
-                            limits[self.custom_slider_names[i]] = {
-                                'lower': slider.min,
-                                'upper': slider.max
-                            }
-                        await ws.send_json(limits)
-                        
-                    elif msg.data.startswith('/update_joint'):
-                        try:
-                            json_str = msg.data[len('/update_joint'):].strip()
-                            if json_str:
-                                updates = json.loads(json_str)
-                                
-                                invalid_joints = []
-                                for joint_name, angle in updates.items():
-                                    if joint_name not in self.slider_names and joint_name not in self.custom_slider_names:
-                                        invalid_joints.append(joint_name)
+    # async def broadcast_joint_update(
+    #     self, joints_to_publish=[], custom_joints_to_publish=[]
+    # ):
+    #     joints = {}
 
-                                if joint_name in self.slider_names:
-                                    joint_index = self.slider_names.index(joint_name)
-                                    if angle < self.slider_handles[joint_index].min or angle > self.slider_handles[joint_index].max:
-                                        invalid_joints.append(joint_name)
-                                elif joint_name in self.custom_slider_names:
-                                    joint_index = self.custom_slider_names.index(joint_name)
-                                    if angle < self.custom_slider_handles[joint_index].min or angle > self.custom_slider_handles[joint_index].max:
-                                        invalid_joints.append(joint_name)
-                                if invalid_joints:
-                                    raise Exception(f"Invalid joints: {invalid_joints}")
-                                
-                                updated_joints = []
-                                for joint_name, angle in updates.items():
-                                    if joint_name in self.slider_names:
-                                        joint_index = self.slider_names.index(joint_name)
-                                        self.slider_handles[joint_index].value = angle
-                                        updated_joints.append(joint_name)
-                                    
-                                    elif joint_name in self.custom_slider_names:
-                                        joint_index = self.custom_slider_names.index(joint_name)
-                                        self.custom_slider_handles[joint_index].value = angle
-                                        updated_joints.append(joint_name)
-                                
-                                await ws.send_json({
-                                    'success': True,
-                                    'updated_joints': updated_joints
-                                })
-                                
-                                # Broadcast updated joints to all subscribers
-                                await self.broadcast_joint_update(updated_joints)
-                                
-                            else:
-                                await ws.send_json({
-                                    'success': False,
-                                    'error': 'No joint data provided'
-                                })
-                        except json.JSONDecodeError:
-                            await ws.send_json({
-                                'success': False,
-                                'error': 'Invalid JSON format'
-                            })
-                        except Exception as e:
-                            await ws.send_json({
-                                'success': False,
-                                'error': str(e)
-                            })
+    #     for joint_name in joints_to_publish:
+    #         if joint_name in self.slider_names:
+    #             joint_index = self.slider_names.index(joint_name)
+    #             joints[joint_name] = self.slider_handles[joint_index].value
 
-                elif msg.type == WSMsgType.ERROR:
-                    print(f'WebSocket error: {ws.exception()}')
-        except Exception as e:
-            print(f"WebSocket error: {e}")
-        finally:
-            self.joint_subscribers.discard(ws)
-            self.clients.discard(ws)
-            print(f"WebSocket client disconnected. Total clients: {len(self.clients)}")
-        
-        return ws
-    
-    def start(self):
-        def run_server():
+    #     for joint_name in custom_joints_to_publish:
+    #         if joint_name in self.custom_slider_names:
+    #             joint_index = self.custom_slider_names.index(joint_name)
+    #             joints[joint_name] = self.custom_slider_handles[joint_index].value
+
+    #     if joints and self.pub:
+    #         try:
+    #             message = json.dumps(joints)
+    #             await self.pub.put(self.joint_status_topic, message.encode())
+    #         except Exception as e:
+    #             print(f"Error broadcasting joint updates: {e}")
+
+    # async def handle_message(self, message):
+    #     """Handle incoming ZeroMQ messages"""
+    #     try:
+    #         data = json.loads(message)
+    #         command = data.get("command")
             
-            async def start_server():
-                runner = web.AppRunner(self.app)
-                await runner.setup()
-                site = web.TCPSite(runner, 'localhost', self.port)
-                await site.start()
-                print(f"WebSocket server started on port {self.port}")
-                print(f"WebSocket endpoint: ws://localhost:{self.port}/ws")
+    #         if command == "get_joints":
+    #             joints = {}
+    #             for i, joint_name in enumerate(self.slider_names):
+    #                 joints[joint_name] = self.slider_handles[i].value
+    #             for i, joint_name in enumerate(self.custom_slider_names):
+    #                 joints[joint_name] = self.custom_slider_handles[i].value
+    #             return {"success": True, "data": joints}
+
+    #         elif command == "get_limits":
+    #             limits = {}
+    #             for i, slider in enumerate(self.slider_handles):
+    #                 limits[self.slider_names[i]] = {
+    #                     "lower": slider.min,
+    #                     "upper": slider.max,
+    #                 }
+    #             for i, slider in enumerate(self.custom_slider_handles):
+    #                 limits[self.custom_slider_names[i]] = {
+    #                     "lower": slider.min,
+    #                     "upper": slider.max,
+    #                 }
+    #             return {"success": True, "data": limits}
+
+    #         elif command == "update_joints":
+    #             updates = data.get("joints", {})
                 
-                while True:
-                    await asyncio.sleep(1)
-            
-            asyncio.run(start_server())
-        
-        self.thread = threading.Thread(target=run_server, daemon=True)
-        self.thread.start()
-            
-def start_websocket_server(slider_handles: List[viser.GuiInputHandle[float]], slider_names: List[str],
-                          custom_slider_handles: List[viser.GuiInputHandle[float]], custom_slider_names: List[str],
-                          robot: ViserUrdf, port: int = 50051):
-    server = WebSocketServer(slider_handles, slider_names, custom_slider_handles, custom_slider_names, robot, port)
-    server.start()
-    return server
+    #             invalid_joints = []
+    #             for joint_name, angle in updates.items():
+    #                 if (
+    #                     joint_name not in self.slider_names
+    #                     and joint_name not in self.custom_slider_names
+    #                 ):
+    #                     invalid_joints.append(joint_name)
+
+    #                 if joint_name in self.slider_names:
+    #                     joint_index = self.slider_names.index(joint_name)
+    #                     if (
+    #                         angle < self.slider_handles[joint_index].min
+    #                         or angle > self.slider_handles[joint_index].max
+    #                     ):
+    #                         invalid_joints.append(joint_name)
+
+    #                 elif joint_name in self.custom_slider_names:
+    #                     joint_index = self.custom_slider_names.index(joint_name)
+    #                     if (
+    #                         angle < self.custom_slider_handles[joint_index].min
+    #                         or angle > self.custom_slider_handles[joint_index].max
+    #                     ):
+    #                         invalid_joints.append(joint_name)
+
+    #             if invalid_joints:
+    #                 return {"success": False, "error": f"Invalid joints: {invalid_joints}"}
+
+    #             updated_joints = []
+    #             for joint_name, angle in updates.items():
+    #                 if joint_name in self.slider_names:
+    #                     joint_index = self.slider_names.index(joint_name)
+    #                     self.slider_handles[joint_index].value = angle
+    #                     updated_joints.append(joint_name)
+
+    #                 elif joint_name in self.custom_slider_names:
+    #                     joint_index = self.custom_slider_names.index(joint_name)
+    #                     self.custom_slider_handles[joint_index].value = angle
+    #                     updated_joints.append(joint_name)
+
+    #             if self.slider_handles:
+    #                 config = [slider.value for slider in self.slider_handles]
+    #                 self.robot.update_cfg(np.array(config))
+
+    #             await self.broadcast_joint_update(updated_joints)
+    #             return {"success": True, "updated_joints": updated_joints}
+    #         else:
+    #             return {"success": False, "error": f"Unknown command: {command}"}
+
+    #     except json.JSONDecodeError:
+    #         return {"success": False, "error": "Invalid JSON format"}
+    #     except Exception as e:
+    #         return {"success": False, "error": str(e)}
