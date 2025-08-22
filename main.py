@@ -1,7 +1,7 @@
 # python main.py --config_path example_config.json
-# echo "get_joints" | websocat ws://localhost:5000/ws
 # echo "get_limits" | websocat ws://localhost:5000/ws
 # echo '/update_joint {"torso_joint": 0.5, "left_hip_pitch_joint": 1.0}' | websocat ws://localhost:5000/ws
+# (echo "get_joints"; cat) | websocat ws://localhost:5000/ws
 
 from dataclasses import dataclass
 import tyro

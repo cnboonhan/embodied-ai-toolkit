@@ -114,8 +114,34 @@ class WebSocketServer:
         self.robot = robot
         self.port = port
         self.clients = set()
+        self.joint_subscribers = set() 
         self.app = web.Application()
         self.app.router.add_get('/ws', self.websocket_handler)
+        
+    async def broadcast_joint_update(self, joints_to_publish=[], custom_joints_to_publish=[]):
+        """Broadcast current joint values to all subscribers"""
+        if not self.joint_subscribers:
+            return
+            
+        joints = {}
+        
+        for joint_name in joints_to_publish:
+            if joint_name in self.slider_names:
+                joint_index = self.slider_names.index(joint_name)
+                joints[joint_name] = self.slider_handles[joint_index].value
+        
+        for joint_name in custom_joints_to_publish:
+            if joint_name in self.custom_slider_names:
+                joint_index = self.custom_slider_names.index(joint_name)
+                joints[joint_name] = self.custom_slider_handles[joint_index].value
+        
+        for ws in self.joint_subscribers.copy():
+            try:
+                await ws.send_json(joints)
+            except Exception as e:
+                print(f"Error broadcasting to client: {e}")
+                self.joint_subscribers.discard(ws)
+                self.clients.discard(ws)
         
     async def websocket_handler(self, request):
         ws = web.WebSocketResponse()
@@ -128,6 +154,7 @@ class WebSocketServer:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
                     if msg.data == 'get_joints':
+                        self.joint_subscribers.add(ws)
                         joints = {}
                         for i, joint_name in enumerate(self.slider_names):
                             joints[joint_name] = self.slider_handles[i].value
@@ -179,6 +206,10 @@ class WebSocketServer:
                                     'success': True,
                                     'updated_joints': updated_joints
                                 })
+                                
+                                # Broadcast updated joints to all subscribers
+                                await self.broadcast_joint_update(updated_joints)
+                                
                             else:
                                 await ws.send_json({
                                     'success': False,
@@ -200,6 +231,7 @@ class WebSocketServer:
         except Exception as e:
             print(f"WebSocket error: {e}")
         finally:
+            self.joint_subscribers.discard(ws)
             self.clients.discard(ws)
             print(f"WebSocket client disconnected. Total clients: {len(self.clients)}")
         
