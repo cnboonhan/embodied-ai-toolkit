@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "aiohttp>=3.12.15",
+    "grpcio>=1.74.0",
+    "robot-descriptions>=1.20.0",
     "tyro>=0.9.28",
     "viser>=1.0.6",
+    "yourdfpy>=0.0.58",
 ]

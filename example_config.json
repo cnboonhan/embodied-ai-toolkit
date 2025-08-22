@@ -1,0 +1,12 @@
+{
+    "urdf_path": "g1_description",
+    "custom_joints": [
+        {
+            "name": "custom_joint1",
+            "type": "revolute",
+            "limits": [0.0, 2.0]
+        }
+    ],
+    "api_port": 5000,
+    "visualization_port": 8080
+}

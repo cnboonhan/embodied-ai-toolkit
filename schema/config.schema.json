@@ -1,0 +1,58 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Embodied AI Toolkit Configuration Schema",
+    "description": "Schema for the embodied AI toolkit configuration file",
+    "type": "object",
+    "properties": {
+        "urdf_path": {
+            "type": "string",
+            "description": "Path to the URDF file or robot description name",
+            "examples": ["g1_description", "/path/to/robot.urdf"]
+        },
+        "custom_joints": {
+            "type": "array",
+            "description": "Array of custom joint definitions",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the joint"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Type of the joint",
+                        "enum": ["revolute"]
+                    },
+                    "limits": {
+                        "type": "array",
+                        "description": "Joint limits [lower_limit, upper_limit]",
+                        "items": {
+                            "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                    }
+                },
+                "required": ["name", "type", "limits"],
+                "additionalProperties": false
+            }
+        },
+        "api_port": {
+            "type": "integer",
+            "description": "Port number for the API server",
+            "minimum": 1,
+            "maximum": 65535,
+            "default": 5000
+        },
+        "visualization_port": {
+            "type": "integer",
+            "description": "Port number for the visualization server",
+            "minimum": 1,
+            "maximum": 65535,
+            "default": 8080
+        }
+    },
+    "required": ["urdf_path", "api_port", "visualization_port"],
+    "additionalProperties": false
+}
