@@ -122,7 +122,7 @@ class WebSocketServer:
         """Broadcast current joint values to all subscribers"""
         if not self.joint_subscribers:
             return
-            
+
         joints = {}
         
         for joint_name in joints_to_publish:
@@ -183,10 +183,18 @@ class WebSocketServer:
                                 updates = json.loads(json_str)
                                 
                                 invalid_joints = []
-                                for joint_name in updates.keys():
+                                for joint_name, angle in updates.items():
                                     if joint_name not in self.slider_names and joint_name not in self.custom_slider_names:
                                         invalid_joints.append(joint_name)
-                                
+
+                                if joint_name in self.slider_names:
+                                    joint_index = self.slider_names.index(joint_name)
+                                    if angle < self.slider_handles[joint_index].min or angle > self.slider_handles[joint_index].max:
+                                        invalid_joints.append(joint_name)
+                                elif joint_name in self.custom_slider_names:
+                                    joint_index = self.custom_slider_names.index(joint_name)
+                                    if angle < self.custom_slider_handles[joint_index].min or angle > self.custom_slider_handles[joint_index].max:
+                                        invalid_joints.append(joint_name)
                                 if invalid_joints:
                                     raise Exception(f"Invalid joints: {invalid_joints}")
                                 
