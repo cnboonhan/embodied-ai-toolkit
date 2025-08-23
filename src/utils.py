@@ -291,15 +291,13 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
                 i
             ].value
 
-        # Create robot configuration if requested
-        robot_config = None
-        if request.include_robot_config:
-            robot_config = api_pb2.RobotConfiguration(
-                joint_names=self.api_server.slider_names,
-                custom_joint_names=self.api_server.custom_slider_names,
-                total_joints=len(self.api_server.slider_names),
-                total_custom_joints=len(self.api_server.custom_slider_names),
-            )
+        # Always create robot configuration
+        robot_config = api_pb2.RobotConfiguration(
+            joint_names=self.api_server.slider_names,
+            custom_joint_names=self.api_server.custom_slider_names,
+            total_joints=len(self.api_server.slider_names),
+            total_custom_joints=len(self.api_server.custom_slider_names),
+        )
 
         timestamp = datetime.now()
         timestamp_proto = api_pb2.Timestamp()
