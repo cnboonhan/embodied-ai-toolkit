@@ -9,6 +9,7 @@ uv venv -p 3.11
 source .venv/bin/activate
 uv sync
 # Install grpcurl: https://github.com/fullstorydev/grpcurl/releases
+uv run main.py --config_path schema/config.json
 ```
 
 ## GRPC
