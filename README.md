@@ -8,5 +8,7 @@ apt update
 uv venv -p 3.11
 source .venv/bin/activate
 uv sync
-# Download websocat: https://github.com/vi/websocat
+# Install grpcurl: https://github.com/fullstorydev/grpcurl/releases
 ```
+
+

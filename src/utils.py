@@ -7,6 +7,16 @@ from viser.extras import ViserUrdf
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 import json
+import asyncio
+import threading
+import time
+from datetime import datetime
+import grpc
+from concurrent import futures
+
+# Import generated gRPC stubs
+from src import api_pb2
+from src import api_pb2_grpc
 
 
 @dataclass
@@ -116,6 +126,201 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
     return slider_handles, slider_names, custom_slider_handles, custom_slider_names
 
 
+class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
+    """gRPC servicer implementation for robot API"""
+
+    def __init__(self, api_server):
+        self.api_server = api_server
+        self._streaming_clients = set()
+        self._streaming_active = False
+        self._streaming_thread = None
+
+    def UpdateJoints(self, request, context):
+        """Update joint positions"""
+        try:
+            # Convert request maps to regular dicts
+            joint_updates = dict(request.joint_updates)
+            custom_joint_updates = dict(request.custom_joint_updates)
+
+            # Validate and update joints
+            updated_joints = []
+            invalid_joints = []
+
+            # Update regular joints
+            for joint_name, angle in joint_updates.items():
+                if joint_name in self.api_server.slider_names:
+                    joint_index = self.api_server.slider_names.index(joint_name)
+                    slider = self.api_server.slider_handles[joint_index]
+
+                    if slider.min <= angle <= slider.max:
+                        slider.value = angle
+                        updated_joints.append(joint_name)
+                    else:
+                        invalid_joints.append(joint_name)
+                else:
+                    invalid_joints.append(joint_name)
+
+            for joint_name, angle in custom_joint_updates.items():
+                if joint_name in self.api_server.custom_slider_names:
+                    joint_index = self.api_server.custom_slider_names.index(joint_name)
+                    slider = self.api_server.custom_slider_handles[joint_index]
+
+                    if slider.min <= angle <= slider.max:
+                        slider.value = angle
+                        updated_joints.append(joint_name)
+                    else:
+                        invalid_joints.append(joint_name)
+                else:
+                    invalid_joints.append(joint_name)
+
+            if self.api_server.slider_handles:
+                config = [slider.value for slider in self.api_server.slider_handles]
+                self.api_server.robot.update_cfg(np.array(config))
+
+            return api_pb2.UpdateJointsResponse(
+                updated_joints=updated_joints, invalid_joints=invalid_joints
+            )
+
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error updating joints: {str(e)}")
+            return api_pb2.UpdateJointsResponse(
+                updated_joints=[],
+                invalid_joints=list(joint_updates.keys())
+                + list(custom_joint_updates.keys()),
+            )
+
+    def GetRobotInfo(self, request, context):
+        """Get comprehensive robot information"""
+        try:
+            joint_positions = {}
+            for i, joint_name in enumerate(self.api_server.slider_names):
+                joint_positions[joint_name] = self.api_server.slider_handles[i].value
+
+            custom_joint_positions = {}
+            for i, joint_name in enumerate(self.api_server.custom_slider_names):
+                custom_joint_positions[joint_name] = (
+                    self.api_server.custom_slider_handles[i].value
+                )
+
+            joint_limits = {}
+            for i, slider in enumerate(self.api_server.slider_handles):
+                joint_limits[self.api_server.slider_names[i]] = api_pb2.JointLimits(
+                    lower=slider.min,
+                    upper=slider.max,
+                    joint_type="revolute",  # Default assumption
+                )
+
+            custom_joint_limits = {}
+            for i, slider in enumerate(self.api_server.custom_slider_handles):
+                custom_joint_limits[self.api_server.custom_slider_names[i]] = (
+                    api_pb2.JointLimits(
+                        lower=slider.min,
+                        upper=slider.max,
+                        joint_type="revolute",  # Default assumption
+                    )
+                )
+
+            return api_pb2.GetRobotInfoResponse(
+                project_name=self.api_server.project_name,
+                joint_names=self.api_server.slider_names,
+                custom_joint_names=self.api_server.custom_slider_names,
+                total_joints=len(self.api_server.slider_names),
+                total_custom_joints=len(self.api_server.custom_slider_names),
+                joint_positions=joint_positions,
+                custom_joint_positions=custom_joint_positions,
+                joint_limits=joint_limits,
+                custom_joint_limits=custom_joint_limits,
+            )
+
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error getting robot info: {str(e)}")
+            return api_pb2.GetRobotInfoResponse()
+
+    def StreamRobotState(self, request, context):
+        """Stream robot state updates"""
+        try:
+            # Add client to streaming set
+            self._streaming_clients.add(context)
+
+            # Start streaming thread if not already running
+            if not self._streaming_active:
+                self._streaming_active = True
+                self._streaming_thread = threading.Thread(
+                    target=self._stream_robot_state, daemon=True
+                )
+                self._streaming_thread.start()
+
+            # Stream data to this client
+            update_frequency = (
+                request.update_frequency if request.update_frequency > 0 else 5.0
+            )
+            interval = 1.0 / update_frequency
+
+            while context.is_active():
+                try:
+                    # Create robot state message
+                    robot_state = self._create_robot_state_message(request)
+                    yield robot_state
+
+                    # Wait for next update
+                    time.sleep(interval)
+
+                except Exception as e:
+                    print(f"Error streaming to client: {e}")
+                    break
+
+            # Remove client from streaming set
+            self._streaming_clients.discard(context)
+
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error in streaming: {str(e)}")
+
+    def _create_robot_state_message(self, request):
+        """Create a RobotState message"""
+        # Get current joint positions
+        joint_positions = {}
+        for i, joint_name in enumerate(self.api_server.slider_names):
+            joint_positions[joint_name] = self.api_server.slider_handles[i].value
+
+        custom_joint_positions = {}
+        for i, joint_name in enumerate(self.api_server.custom_slider_names):
+            custom_joint_positions[joint_name] = self.api_server.custom_slider_handles[
+                i
+            ].value
+
+        # Create robot configuration if requested
+        robot_config = None
+        if request.include_robot_config:
+            robot_config = api_pb2.RobotConfiguration(
+                joint_names=self.api_server.slider_names,
+                custom_joint_names=self.api_server.custom_slider_names,
+                total_joints=len(self.api_server.slider_names),
+                total_custom_joints=len(self.api_server.custom_slider_names),
+            )
+
+        timestamp = datetime.now()
+        timestamp_proto = api_pb2.Timestamp()
+        timestamp_proto.FromDatetime(timestamp)
+
+        return api_pb2.RobotState(
+            joint_positions=joint_positions,
+            custom_joint_positions=custom_joint_positions,
+            robot_config=robot_config,
+            timestamp=timestamp_proto,
+            project_name=self.api_server.project_name,
+        )
+
+    def _stream_robot_state(self):
+        """Background thread for streaming robot state"""
+        while self._streaming_active:
+            # This method can be used for broadcasting to all clients
+            # Currently each client has its own streaming loop
+            time.sleep(0.1)
+
+
 class ApiServer:
     def __init__(
         self,
@@ -124,118 +329,49 @@ class ApiServer:
         custom_slider_handles: List[viser.GuiInputHandle[float]],
         custom_slider_names: List[str],
         robot: ViserUrdf,
-        port: int = 5000,
+        project_name: str,
+        api_port: int = 5000,
+        data_uri: str = "rerun+http://localhost:5001/proxy",
     ):
         self.slider_handles = slider_handles
         self.slider_names = slider_names
         self.custom_slider_handles = custom_slider_handles
         self.custom_slider_names = custom_slider_names
         self.robot = robot
-        self.port = port
-        
+        self.project_name = project_name
+        self.api_port = api_port
+        self.data_uri = data_uri
 
-    # async def broadcast_joint_update(
-    #     self, joints_to_publish=[], custom_joints_to_publish=[]
-    # ):
-    #     joints = {}
+        # Initialize gRPC server
+        self.grpc_server = None
+        self.grpc_servicer = None
+        self._start_grpc_server()
 
-    #     for joint_name in joints_to_publish:
-    #         if joint_name in self.slider_names:
-    #             joint_index = self.slider_names.index(joint_name)
-    #             joints[joint_name] = self.slider_handles[joint_index].value
+    def _start_grpc_server(self):
+        """Start the gRPC server"""
+        try:
+            # Create gRPC server
+            self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
-    #     for joint_name in custom_joints_to_publish:
-    #         if joint_name in self.custom_slider_names:
-    #             joint_index = self.custom_slider_names.index(joint_name)
-    #             joints[joint_name] = self.custom_slider_handles[joint_index].value
+            # Create and add servicer
+            self.grpc_servicer = RobotApiServicer(self)
+            api_pb2_grpc.add_RobotApiServiceServicer_to_server(
+                self.grpc_servicer, self.grpc_server
+            )
 
-    #     if joints and self.pub:
-    #         try:
-    #             message = json.dumps(joints)
-    #             await self.pub.put(self.joint_status_topic, message.encode())
-    #         except Exception as e:
-    #             print(f"Error broadcasting joint updates: {e}")
+            # Start server
+            server_address = f"[::]:{self.api_port}"
+            self.grpc_server.add_insecure_port(server_address)
+            self.grpc_server.start()
 
-    # async def handle_message(self, message):
-    #     """Handle incoming ZeroMQ messages"""
-    #     try:
-    #         data = json.loads(message)
-    #         command = data.get("command")
-            
-    #         if command == "get_joints":
-    #             joints = {}
-    #             for i, joint_name in enumerate(self.slider_names):
-    #                 joints[joint_name] = self.slider_handles[i].value
-    #             for i, joint_name in enumerate(self.custom_slider_names):
-    #                 joints[joint_name] = self.custom_slider_handles[i].value
-    #             return {"success": True, "data": joints}
+            print(f"✓ gRPC server started on port {self.api_port}")
 
-    #         elif command == "get_limits":
-    #             limits = {}
-    #             for i, slider in enumerate(self.slider_handles):
-    #                 limits[self.slider_names[i]] = {
-    #                     "lower": slider.min,
-    #                     "upper": slider.max,
-    #                 }
-    #             for i, slider in enumerate(self.custom_slider_handles):
-    #                 limits[self.custom_slider_names[i]] = {
-    #                     "lower": slider.min,
-    #                     "upper": slider.max,
-    #                 }
-    #             return {"success": True, "data": limits}
+        except Exception as e:
+            print(f"✗ Failed to start gRPC server: {e}")
+            self.grpc_server = None
 
-    #         elif command == "update_joints":
-    #             updates = data.get("joints", {})
-                
-    #             invalid_joints = []
-    #             for joint_name, angle in updates.items():
-    #                 if (
-    #                     joint_name not in self.slider_names
-    #                     and joint_name not in self.custom_slider_names
-    #                 ):
-    #                     invalid_joints.append(joint_name)
-
-    #                 if joint_name in self.slider_names:
-    #                     joint_index = self.slider_names.index(joint_name)
-    #                     if (
-    #                         angle < self.slider_handles[joint_index].min
-    #                         or angle > self.slider_handles[joint_index].max
-    #                     ):
-    #                         invalid_joints.append(joint_name)
-
-    #                 elif joint_name in self.custom_slider_names:
-    #                     joint_index = self.custom_slider_names.index(joint_name)
-    #                     if (
-    #                         angle < self.custom_slider_handles[joint_index].min
-    #                         or angle > self.custom_slider_handles[joint_index].max
-    #                     ):
-    #                         invalid_joints.append(joint_name)
-
-    #             if invalid_joints:
-    #                 return {"success": False, "error": f"Invalid joints: {invalid_joints}"}
-
-    #             updated_joints = []
-    #             for joint_name, angle in updates.items():
-    #                 if joint_name in self.slider_names:
-    #                     joint_index = self.slider_names.index(joint_name)
-    #                     self.slider_handles[joint_index].value = angle
-    #                     updated_joints.append(joint_name)
-
-    #                 elif joint_name in self.custom_slider_names:
-    #                     joint_index = self.custom_slider_names.index(joint_name)
-    #                     self.custom_slider_handles[joint_index].value = angle
-    #                     updated_joints.append(joint_name)
-
-    #             if self.slider_handles:
-    #                 config = [slider.value for slider in self.slider_handles]
-    #                 self.robot.update_cfg(np.array(config))
-
-    #             await self.broadcast_joint_update(updated_joints)
-    #             return {"success": True, "updated_joints": updated_joints}
-    #         else:
-    #             return {"success": False, "error": f"Unknown command: {command}"}
-
-    #     except json.JSONDecodeError:
-    #         return {"success": False, "error": "Invalid JSON format"}
-    #     except Exception as e:
-    #         return {"success": False, "error": str(e)}
+    def stop_grpc_server(self):
+        """Stop the gRPC server"""
+        if self.grpc_server:
+            self.grpc_server.stop(0)
+            print("✓ gRPC server stopped")

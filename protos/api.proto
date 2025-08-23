@@ -1,0 +1,83 @@
+// python -m grpc_tools.protoc --proto_path=protos --python_out=src --grpc_python_out=src protos/api.proto
+
+syntax = "proto3";
+
+package rosbot_api;
+
+import "google/protobuf/timestamp.proto";
+
+// Service definition for robot joint control and data streaming
+service RobotApiService {
+  // Update joint positions
+  rpc UpdateJoints(UpdateJointsRequest) returns (UpdateJointsResponse);
+  
+  // Stream robot state updates
+  rpc StreamRobotState(StreamRobotStateRequest) returns (stream RobotState);
+  
+  // Get robot configuration info
+  rpc GetRobotInfo(GetRobotInfoRequest) returns (GetRobotInfoResponse);
+}
+
+
+// Joint limits structure
+message JointLimits {
+  double lower = 1;
+  double upper = 2;
+  string joint_type = 3;  // e.g., "revolute", "prismatic"
+}
+
+// Request to update joint positions
+message UpdateJointsRequest {
+  map<string, double> joint_updates = 1;  // joint_name -> new_position
+  map<string, double> custom_joint_updates = 2;  // custom joint_name -> new_position
+}
+
+// Response to joint update
+message UpdateJointsResponse {
+  repeated string updated_joints = 1;
+  repeated string invalid_joints = 2;
+}
+
+
+
+// Request to start streaming robot state
+message StreamRobotStateRequest {
+  bool include_joint_data = 1;
+  bool include_robot_config = 2;
+  double update_frequency = 3;  // Hz, default 5.0
+}
+
+// Streaming robot state
+message RobotState {
+  map<string, double> joint_positions = 1;
+  map<string, double> custom_joint_positions = 2;
+  RobotConfiguration robot_config = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  string project_name = 5;
+}
+
+// Robot configuration information
+message RobotConfiguration {
+  repeated string joint_names = 1;
+  repeated string custom_joint_names = 2;
+  int32 total_joints = 3;
+  int32 total_custom_joints = 4;
+}
+
+// Request for robot information
+message GetRobotInfoRequest {
+  // Empty request
+}
+
+// Response with robot information
+message GetRobotInfoResponse {
+  string project_name = 1;
+  repeated string joint_names = 2;
+  repeated string custom_joint_names = 3;
+  int32 total_joints = 4;
+  int32 total_custom_joints = 5;
+  map<string, double> joint_positions = 6;  // Current joint positions
+  map<string, double> custom_joint_positions = 7;  // Current custom joint positions
+  map<string, JointLimits> joint_limits = 8;  // Joint limits
+  map<string, JointLimits> custom_joint_limits = 9;  // Custom joint limits
+}
