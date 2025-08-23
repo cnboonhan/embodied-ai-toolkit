@@ -30,7 +30,7 @@ grpcurl -plaintext -d '{
 }' localhost:5000 rosbot_api.RobotApiService/UpdateJoints
 
 # Stream Joints
-grpcurl -plaintext -d '{
+grpcurl -format json -plaintext -d '{
   "update_frequency": 100.0
 }' localhost:5000 rosbot_api.RobotApiService/StreamJointData
 ```
