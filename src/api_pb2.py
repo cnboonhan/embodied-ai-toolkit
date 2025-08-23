@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tapi.proto\x12\nrosbot_api\x1a\x1fgoogle/protobuf/timestamp.proto\"?\n\x0bJointLimits\x12\r\n\x05lower\x18\x01 \x01(\x01\x12\r\n\x05upper\x18\x02 \x01(\x01\x12\x12\n\njoint_type\x18\x03 \x01(\t\"\xa6\x02\n\x13UpdateJointsRequest\x12H\n\rjoint_updates\x18\x01 \x03(\x0b\x32\x31.rosbot_api.UpdateJointsRequest.JointUpdatesEntry\x12U\n\x14\x63ustom_joint_updates\x18\x02 \x03(\x0b\x32\x37.rosbot_api.UpdateJointsRequest.CustomJointUpdatesEntry\x1a\x33\n\x11JointUpdatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a\x39\n\x17\x43ustomJointUpdatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"F\n\x14UpdateJointsResponse\x12\x16\n\x0eupdated_joints\x18\x01 \x03(\t\x12\x16\n\x0einvalid_joints\x18\x02 \x03(\t\"m\n\x17StreamRobotStateRequest\x12\x1a\n\x12include_joint_data\x18\x01 \x01(\x08\x12\x1c\n\x14include_robot_config\x18\x02 \x01(\x08\x12\x18\n\x10update_frequency\x18\x03 \x01(\x01\"\x92\x03\n\nRobotState\x12\x43\n\x0fjoint_positions\x18\x01 \x03(\x0b\x32*.rosbot_api.RobotState.JointPositionsEntry\x12P\n\x16\x63ustom_joint_positions\x18\x02 \x03(\x0b\x32\x30.rosbot_api.RobotState.CustomJointPositionsEntry\x12\x34\n\x0crobot_config\x18\x03 \x01(\x0b\x32\x1e.rosbot_api.RobotConfiguration\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\x0cproject_name\x18\x05 \x01(\t\x1a\x35\n\x13JointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a;\n\x19\x43ustomJointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"x\n\x12RobotConfiguration\x12\x13\n\x0bjoint_names\x18\x01 \x03(\t\x12\x1a\n\x12\x63ustom_joint_names\x18\x02 \x03(\t\x12\x14\n\x0ctotal_joints\x18\x03 \x01(\x05\x12\x1b\n\x13total_custom_joints\x18\x04 \x01(\x05\"\x15\n\x13GetRobotInfoRequest\"\xee\x05\n\x14GetRobotInfoResponse\x12\x14\n\x0cproject_name\x18\x01 \x01(\t\x12\x13\n\x0bjoint_names\x18\x02 \x03(\t\x12\x1a\n\x12\x63ustom_joint_names\x18\x03 \x03(\t\x12\x14\n\x0ctotal_joints\x18\x04 \x01(\x05\x12\x1b\n\x13total_custom_joints\x18\x05 \x01(\x05\x12M\n\x0fjoint_positions\x18\x06 \x03(\x0b\x32\x34.rosbot_api.GetRobotInfoResponse.JointPositionsEntry\x12Z\n\x16\x63ustom_joint_positions\x18\x07 \x03(\x0b\x32:.rosbot_api.GetRobotInfoResponse.CustomJointPositionsEntry\x12G\n\x0cjoint_limits\x18\x08 \x03(\x0b\x32\x31.rosbot_api.GetRobotInfoResponse.JointLimitsEntry\x12T\n\x13\x63ustom_joint_limits\x18\t \x03(\x0b\x32\x37.rosbot_api.GetRobotInfoResponse.CustomJointLimitsEntry\x1a\x35\n\x13JointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a;\n\x19\x43ustomJointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1aK\n\x10JointLimitsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12&\n\x05value\x18\x02 \x01(\x0b\x32\x17.rosbot_api.JointLimits:\x02\x38\x01\x1aQ\n\x16\x43ustomJointLimitsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12&\n\x05value\x18\x02 \x01(\x0b\x32\x17.rosbot_api.JointLimits:\x02\x38\x01\x32\x8a\x02\n\x0fRobotApiService\x12Q\n\x0cUpdateJoints\x12\x1f.rosbot_api.UpdateJointsRequest\x1a .rosbot_api.UpdateJointsResponse\x12Q\n\x10StreamRobotState\x12#.rosbot_api.StreamRobotStateRequest\x1a\x16.rosbot_api.RobotState0\x01\x12Q\n\x0cGetRobotInfo\x12\x1f.rosbot_api.GetRobotInfoRequest\x1a .rosbot_api.GetRobotInfoResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tapi.proto\x12\nrosbot_api\x1a\x1fgoogle/protobuf/timestamp.proto\"?\n\x0bJointLimits\x12\r\n\x05lower\x18\x01 \x01(\x01\x12\r\n\x05upper\x18\x02 \x01(\x01\x12\x12\n\njoint_type\x18\x03 \x01(\t\"\xa6\x02\n\x13UpdateJointsRequest\x12H\n\rjoint_updates\x18\x01 \x03(\x0b\x32\x31.rosbot_api.UpdateJointsRequest.JointUpdatesEntry\x12U\n\x14\x63ustom_joint_updates\x18\x02 \x03(\x0b\x32\x37.rosbot_api.UpdateJointsRequest.CustomJointUpdatesEntry\x1a\x33\n\x11JointUpdatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a\x39\n\x17\x43ustomJointUpdatesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"F\n\x14UpdateJointsResponse\x12\x16\n\x0eupdated_joints\x18\x01 \x03(\t\x12\x16\n\x0einvalid_joints\x18\x02 \x03(\t\"2\n\x16StreamJointDataRequest\x12\x18\n\x10update_frequency\x18\x01 \x01(\x01\"\x92\x03\n\nRobotState\x12\x43\n\x0fjoint_positions\x18\x01 \x03(\x0b\x32*.rosbot_api.RobotState.JointPositionsEntry\x12P\n\x16\x63ustom_joint_positions\x18\x02 \x03(\x0b\x32\x30.rosbot_api.RobotState.CustomJointPositionsEntry\x12\x34\n\x0crobot_config\x18\x03 \x01(\x0b\x32\x1e.rosbot_api.RobotConfiguration\x12-\n\ttimestamp\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\x0cproject_name\x18\x05 \x01(\t\x1a\x35\n\x13JointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a;\n\x19\x43ustomJointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"\xc6\x02\n\nJointState\x12\x43\n\x0fjoint_positions\x18\x01 \x03(\x0b\x32*.rosbot_api.JointState.JointPositionsEntry\x12P\n\x16\x63ustom_joint_positions\x18\x02 \x03(\x0b\x32\x30.rosbot_api.JointState.CustomJointPositionsEntry\x12-\n\ttimestamp\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x1a\x35\n\x13JointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a;\n\x19\x43ustomJointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"x\n\x12RobotConfiguration\x12\x13\n\x0bjoint_names\x18\x01 \x03(\t\x12\x1a\n\x12\x63ustom_joint_names\x18\x02 \x03(\t\x12\x14\n\x0ctotal_joints\x18\x03 \x01(\x05\x12\x1b\n\x13total_custom_joints\x18\x04 \x01(\x05\"\x15\n\x13GetRobotInfoRequest\"\xee\x05\n\x14GetRobotInfoResponse\x12\x14\n\x0cproject_name\x18\x01 \x01(\t\x12\x13\n\x0bjoint_names\x18\x02 \x03(\t\x12\x1a\n\x12\x63ustom_joint_names\x18\x03 \x03(\t\x12\x14\n\x0ctotal_joints\x18\x04 \x01(\x05\x12\x1b\n\x13total_custom_joints\x18\x05 \x01(\x05\x12M\n\x0fjoint_positions\x18\x06 \x03(\x0b\x32\x34.rosbot_api.GetRobotInfoResponse.JointPositionsEntry\x12Z\n\x16\x63ustom_joint_positions\x18\x07 \x03(\x0b\x32:.rosbot_api.GetRobotInfoResponse.CustomJointPositionsEntry\x12G\n\x0cjoint_limits\x18\x08 \x03(\x0b\x32\x31.rosbot_api.GetRobotInfoResponse.JointLimitsEntry\x12T\n\x13\x63ustom_joint_limits\x18\t \x03(\x0b\x32\x37.rosbot_api.GetRobotInfoResponse.CustomJointLimitsEntry\x1a\x35\n\x13JointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1a;\n\x19\x43ustomJointPositionsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\x1aK\n\x10JointLimitsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12&\n\x05value\x18\x02 \x01(\x0b\x32\x17.rosbot_api.JointLimits:\x02\x38\x01\x1aQ\n\x16\x43ustomJointLimitsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12&\n\x05value\x18\x02 \x01(\x0b\x32\x17.rosbot_api.JointLimits:\x02\x38\x01\x32\x88\x02\n\x0fRobotApiService\x12Q\n\x0cUpdateJoints\x12\x1f.rosbot_api.UpdateJointsRequest\x1a .rosbot_api.UpdateJointsResponse\x12O\n\x0fStreamJointData\x12\".rosbot_api.StreamJointDataRequest\x1a\x16.rosbot_api.JointState0\x01\x12Q\n\x0cGetRobotInfo\x12\x1f.rosbot_api.GetRobotInfoRequest\x1a .rosbot_api.GetRobotInfoResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,6 +40,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ROBOTSTATE_JOINTPOSITIONSENTRY']._serialized_options = b'8\001'
   _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._loaded_options = None
   _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_options = b'8\001'
+  _globals['_JOINTSTATE_JOINTPOSITIONSENTRY']._loaded_options = None
+  _globals['_JOINTSTATE_JOINTPOSITIONSENTRY']._serialized_options = b'8\001'
+  _globals['_JOINTSTATE_CUSTOMJOINTPOSITIONSENTRY']._loaded_options = None
+  _globals['_JOINTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_options = b'8\001'
   _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._loaded_options = None
   _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._serialized_options = b'8\001'
   _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTPOSITIONSENTRY']._loaded_options = None
@@ -58,28 +62,34 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_UPDATEJOINTSREQUEST_CUSTOMJOINTUPDATESENTRY']._serialized_end=418
   _globals['_UPDATEJOINTSRESPONSE']._serialized_start=420
   _globals['_UPDATEJOINTSRESPONSE']._serialized_end=490
-  _globals['_STREAMROBOTSTATEREQUEST']._serialized_start=492
-  _globals['_STREAMROBOTSTATEREQUEST']._serialized_end=601
-  _globals['_ROBOTSTATE']._serialized_start=604
-  _globals['_ROBOTSTATE']._serialized_end=1006
-  _globals['_ROBOTSTATE_JOINTPOSITIONSENTRY']._serialized_start=892
-  _globals['_ROBOTSTATE_JOINTPOSITIONSENTRY']._serialized_end=945
-  _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_start=947
-  _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_end=1006
-  _globals['_ROBOTCONFIGURATION']._serialized_start=1008
-  _globals['_ROBOTCONFIGURATION']._serialized_end=1128
-  _globals['_GETROBOTINFOREQUEST']._serialized_start=1130
-  _globals['_GETROBOTINFOREQUEST']._serialized_end=1151
-  _globals['_GETROBOTINFORESPONSE']._serialized_start=1154
-  _globals['_GETROBOTINFORESPONSE']._serialized_end=1904
-  _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._serialized_start=892
-  _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._serialized_end=945
-  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTPOSITIONSENTRY']._serialized_start=947
-  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTPOSITIONSENTRY']._serialized_end=1006
-  _globals['_GETROBOTINFORESPONSE_JOINTLIMITSENTRY']._serialized_start=1746
-  _globals['_GETROBOTINFORESPONSE_JOINTLIMITSENTRY']._serialized_end=1821
-  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTLIMITSENTRY']._serialized_start=1823
-  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTLIMITSENTRY']._serialized_end=1904
-  _globals['_ROBOTAPISERVICE']._serialized_start=1907
-  _globals['_ROBOTAPISERVICE']._serialized_end=2173
+  _globals['_STREAMJOINTDATAREQUEST']._serialized_start=492
+  _globals['_STREAMJOINTDATAREQUEST']._serialized_end=542
+  _globals['_ROBOTSTATE']._serialized_start=545
+  _globals['_ROBOTSTATE']._serialized_end=947
+  _globals['_ROBOTSTATE_JOINTPOSITIONSENTRY']._serialized_start=833
+  _globals['_ROBOTSTATE_JOINTPOSITIONSENTRY']._serialized_end=886
+  _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_start=888
+  _globals['_ROBOTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_end=947
+  _globals['_JOINTSTATE']._serialized_start=950
+  _globals['_JOINTSTATE']._serialized_end=1276
+  _globals['_JOINTSTATE_JOINTPOSITIONSENTRY']._serialized_start=833
+  _globals['_JOINTSTATE_JOINTPOSITIONSENTRY']._serialized_end=886
+  _globals['_JOINTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_start=888
+  _globals['_JOINTSTATE_CUSTOMJOINTPOSITIONSENTRY']._serialized_end=947
+  _globals['_ROBOTCONFIGURATION']._serialized_start=1278
+  _globals['_ROBOTCONFIGURATION']._serialized_end=1398
+  _globals['_GETROBOTINFOREQUEST']._serialized_start=1400
+  _globals['_GETROBOTINFOREQUEST']._serialized_end=1421
+  _globals['_GETROBOTINFORESPONSE']._serialized_start=1424
+  _globals['_GETROBOTINFORESPONSE']._serialized_end=2174
+  _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._serialized_start=833
+  _globals['_GETROBOTINFORESPONSE_JOINTPOSITIONSENTRY']._serialized_end=886
+  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTPOSITIONSENTRY']._serialized_start=888
+  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTPOSITIONSENTRY']._serialized_end=947
+  _globals['_GETROBOTINFORESPONSE_JOINTLIMITSENTRY']._serialized_start=2016
+  _globals['_GETROBOTINFORESPONSE_JOINTLIMITSENTRY']._serialized_end=2091
+  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTLIMITSENTRY']._serialized_start=2093
+  _globals['_GETROBOTINFORESPONSE_CUSTOMJOINTLIMITSENTRY']._serialized_end=2174
+  _globals['_ROBOTAPISERVICE']._serialized_start=2177
+  _globals['_ROBOTAPISERVICE']._serialized_end=2441
 # @@protoc_insertion_point(module_scope)

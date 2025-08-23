@@ -1,4 +1,5 @@
 // python -m grpc_tools.protoc --proto_path=protos --python_out=src --grpc_python_out=src protos/api.proto
+// update api_pb2_grpc.py to src.api_pb2
 
 syntax = "proto3";
 
@@ -11,8 +12,8 @@ service RobotApiService {
   // Update joint positions
   rpc UpdateJoints(UpdateJointsRequest) returns (UpdateJointsResponse);
   
-  // Stream robot state updates
-  rpc StreamRobotState(StreamRobotStateRequest) returns (stream RobotState);
+  // Stream joint data updates
+  rpc StreamJointData(StreamJointDataRequest) returns (stream JointState);
   
   // Get robot configuration info
   rpc GetRobotInfo(GetRobotInfoRequest) returns (GetRobotInfoResponse);
@@ -40,11 +41,9 @@ message UpdateJointsResponse {
 
 
 
-// Request to start streaming robot state
-message StreamRobotStateRequest {
-  bool include_joint_data = 1;
-  bool include_robot_config = 2;
-  double update_frequency = 3;  // Hz, default 5.0
+// Request to start streaming joint data
+message StreamJointDataRequest {
+  double update_frequency = 1;  // Hz, default 5.0
 }
 
 // Streaming robot state
@@ -54,6 +53,13 @@ message RobotState {
   RobotConfiguration robot_config = 3;
   google.protobuf.Timestamp timestamp = 4;
   string project_name = 5;
+}
+
+// Joint state containing current joint positions
+message JointState {
+  map<string, double> joint_positions = 1;
+  map<string, double> custom_joint_positions = 2;
+  google.protobuf.Timestamp timestamp = 3;
 }
 
 // Robot configuration information

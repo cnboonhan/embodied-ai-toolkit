@@ -13,6 +13,8 @@ import time
 from datetime import datetime
 import grpc
 from concurrent import futures
+from grpc_reflection.v1alpha import reflection
+from google.protobuf.timestamp_pb2 import Timestamp
 
 # Import generated gRPC stubs
 from src import api_pb2
@@ -238,8 +240,8 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
             context.set_details(f"Error getting robot info: {str(e)}")
             return api_pb2.GetRobotInfoResponse()
 
-    def StreamRobotState(self, request, context):
-        """Stream robot state updates"""
+    def StreamJointData(self, request, context):
+        """Stream joint data updates"""
         try:
             # Add client to streaming set
             self._streaming_clients.add(context)
@@ -248,7 +250,7 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
             if not self._streaming_active:
                 self._streaming_active = True
                 self._streaming_thread = threading.Thread(
-                    target=self._stream_robot_state, daemon=True
+                    target=self._stream_joint_data, daemon=True
                 )
                 self._streaming_thread.start()
 
@@ -260,9 +262,9 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
 
             while context.is_active():
                 try:
-                    # Create robot state message
-                    robot_state = self._create_robot_state_message(request)
-                    yield robot_state
+                    # Create joint state message
+                    joint_state = self._create_joint_state_message()
+                    yield joint_state
 
                     # Wait for next update
                     time.sleep(interval)
@@ -278,8 +280,8 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Error in streaming: {str(e)}")
 
-    def _create_robot_state_message(self, request):
-        """Create a RobotState message"""
+    def _create_joint_state_message(self):
+        """Create a JointState message"""
         # Get current joint positions
         joint_positions = {}
         for i, joint_name in enumerate(self.api_server.slider_names):
@@ -291,28 +293,18 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
                 i
             ].value
 
-        # Always create robot configuration
-        robot_config = api_pb2.RobotConfiguration(
-            joint_names=self.api_server.slider_names,
-            custom_joint_names=self.api_server.custom_slider_names,
-            total_joints=len(self.api_server.slider_names),
-            total_custom_joints=len(self.api_server.custom_slider_names),
-        )
-
         timestamp = datetime.now()
-        timestamp_proto = api_pb2.Timestamp()
+        timestamp_proto = Timestamp()
         timestamp_proto.FromDatetime(timestamp)
 
-        return api_pb2.RobotState(
+        return api_pb2.JointState(
             joint_positions=joint_positions,
             custom_joint_positions=custom_joint_positions,
-            robot_config=robot_config,
             timestamp=timestamp_proto,
-            project_name=self.api_server.project_name,
         )
 
-    def _stream_robot_state(self):
-        """Background thread for streaming robot state"""
+    def _stream_joint_data(self):
+        """Background thread for streaming joint data"""
         while self._streaming_active:
             # This method can be used for broadcasting to all clients
             # Currently each client has its own streaming loop
@@ -347,20 +339,22 @@ class ApiServer:
 
     def _start_grpc_server(self):
         """Start the gRPC server"""
+        SERVICE_NAMES = (
+            api_pb2.DESCRIPTOR.services_by_name["RobotApiService"].full_name,
+            reflection.SERVICE_NAME,
+        )
         try:
-            # Create gRPC server
             self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
 
-            # Create and add servicer
             self.grpc_servicer = RobotApiServicer(self)
             api_pb2_grpc.add_RobotApiServiceServicer_to_server(
                 self.grpc_servicer, self.grpc_server
             )
 
-            # Start server
             server_address = f"[::]:{self.api_port}"
             self.grpc_server.add_insecure_port(server_address)
             self.grpc_server.start()
+            reflection.enable_server_reflection(SERVICE_NAMES, self.grpc_server)
 
             print(f"✓ gRPC server started on port {self.api_port}")
 

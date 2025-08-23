@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import api_pb2 as api__pb2
+import src.api_pb2 as api__pb2
 
 GRPC_GENERATED_VERSION = '1.74.0'
 GRPC_VERSION = grpc.__version__
@@ -40,10 +40,10 @@ class RobotApiServiceStub(object):
                 request_serializer=api__pb2.UpdateJointsRequest.SerializeToString,
                 response_deserializer=api__pb2.UpdateJointsResponse.FromString,
                 _registered_method=True)
-        self.StreamRobotState = channel.unary_stream(
-                '/rosbot_api.RobotApiService/StreamRobotState',
-                request_serializer=api__pb2.StreamRobotStateRequest.SerializeToString,
-                response_deserializer=api__pb2.RobotState.FromString,
+        self.StreamJointData = channel.unary_stream(
+                '/rosbot_api.RobotApiService/StreamJointData',
+                request_serializer=api__pb2.StreamJointDataRequest.SerializeToString,
+                response_deserializer=api__pb2.JointState.FromString,
                 _registered_method=True)
         self.GetRobotInfo = channel.unary_unary(
                 '/rosbot_api.RobotApiService/GetRobotInfo',
@@ -63,8 +63,8 @@ class RobotApiServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def StreamRobotState(self, request, context):
-        """Stream robot state updates
+    def StreamJointData(self, request, context):
+        """Stream joint data updates
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -85,10 +85,10 @@ def add_RobotApiServiceServicer_to_server(servicer, server):
                     request_deserializer=api__pb2.UpdateJointsRequest.FromString,
                     response_serializer=api__pb2.UpdateJointsResponse.SerializeToString,
             ),
-            'StreamRobotState': grpc.unary_stream_rpc_method_handler(
-                    servicer.StreamRobotState,
-                    request_deserializer=api__pb2.StreamRobotStateRequest.FromString,
-                    response_serializer=api__pb2.RobotState.SerializeToString,
+            'StreamJointData': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamJointData,
+                    request_deserializer=api__pb2.StreamJointDataRequest.FromString,
+                    response_serializer=api__pb2.JointState.SerializeToString,
             ),
             'GetRobotInfo': grpc.unary_unary_rpc_method_handler(
                     servicer.GetRobotInfo,
@@ -135,7 +135,7 @@ class RobotApiService(object):
             _registered_method=True)
 
     @staticmethod
-    def StreamRobotState(request,
+    def StreamJointData(request,
             target,
             options=(),
             channel_credentials=None,
@@ -148,9 +148,9 @@ class RobotApiService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/rosbot_api.RobotApiService/StreamRobotState',
-            api__pb2.StreamRobotStateRequest.SerializeToString,
-            api__pb2.RobotState.FromString,
+            '/rosbot_api.RobotApiService/StreamJointData',
+            api__pb2.StreamJointDataRequest.SerializeToString,
+            api__pb2.JointState.FromString,
             options,
             channel_credentials,
             insecure,
