@@ -93,28 +93,30 @@ def _suppress_warnings(func):
             sys.stderr = old_stderr
 
 
-def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider):
+def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider, enable_slider_control=None):
     """Update robot configuration and log joint changes to Rerun"""
-    # Update robot configuration with warning suppression
-    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
-    
-    # Log the updated joint to Rerun
     if updated_slider in slider_handles:
         joint_index = slider_handles.index(updated_slider)
         joint_name = slider_names[joint_index]
         rr.log(f"joints/{joint_name}", rr.Scalars(updated_slider.value))
-
-
-def _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider):
-    """Update robot configuration and log custom joint changes to Rerun"""
-    # Update robot configuration (only regular joints affect robot config) with warning suppression
-    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
     
-    # Log the updated custom joint to Rerun
+    if enable_slider_control is not None and not enable_slider_control.value:
+        return
+        
+    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
+
+
+def _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider, enable_slider_control=None):
+    """Update robot configuration and log custom joint changes to Rerun"""
     if updated_slider in custom_slider_handles:
         joint_index = custom_slider_handles.index(updated_slider)
         joint_name = custom_slider_names[joint_index]
         rr.log(f"custom_joints/{joint_name}", rr.Scalars(updated_slider.value))
+    
+    if enable_slider_control is not None and not enable_slider_control.value:
+        return
+        
+    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
 
 
 def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
@@ -122,6 +124,9 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
     slider_handles: list[viser.GuiInputHandle[float]] = []
     custom_slider_handles: list[viser.GuiInputHandle[float]] = []
     custom_slider_names: list[str] = []
+    
+    # Global flag to control slider callbacks
+    enable_slider_control = server.gui.add_checkbox("Enable slider control", initial_value=False)
 
     with server.gui.add_folder("Joint position controls"):
         for joint_name, (
@@ -140,7 +145,7 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                 initial_value=initial_pos,
             )
             slider.on_update(
-                lambda _, s=slider: _update_robot_and_log(robot, slider_handles, slider_names, s)
+                lambda _, s=slider: _update_robot_and_log(robot, slider_handles, slider_names, s, enable_slider_control)
             )
             slider_handles.append(slider)
             slider_names.append(joint_name)
@@ -159,7 +164,7 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                     initial_value=initial_pos,
                 )
                 slider.on_update(
-                    lambda _, s=slider: _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, s)
+                    lambda _, s=slider: _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, s, enable_slider_control)
                 )
                 custom_slider_handles.append(slider)
                 custom_slider_names.append(custom_joint.name)

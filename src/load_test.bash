@@ -118,6 +118,43 @@ extract_joint_limits() {
     echo "Joint '${joint_name}': limits [${LOWER}, ${UPPER}]"
 }
 
+# Function to extract all joint limits once and store them
+extract_all_joint_limits() {
+    echo "Extracting joint limits for all specified joints..."
+    
+    # Initialize associative arrays for joint limits
+    declare -gA JOINT_LIMITS_LOWER
+    declare -gA JOINT_LIMITS_UPPER
+    
+    for joint_name in $JOINT_NAMES; do
+        # Extract limits using jq (if available) or basic parsing
+        if command -v jq &> /dev/null; then
+            # Using jq for better JSON parsing
+            LOWER=$(echo "$RESPONSE" | jq -r ".joint_limits.\"${joint_name}\".lower // .custom_joint_limits.\"${joint_name}\".lower" 2>/dev/null)
+            UPPER=$(echo "$RESPONSE" | jq -r ".joint_limits.\"${joint_name}\".upper // .custom_joint_limits.\"${joint_name}\".upper" 2>/dev/null)
+        else
+            # Basic parsing without jq - look for the joint limits section
+            LOWER=$(echo "$RESPONSE" | sed -n "/\"${joint_name}\":/,/}/p" | grep "lower" | grep -o "[0-9.-]*")
+            UPPER=$(echo "$RESPONSE" | sed -n "/\"${joint_name}\":/,/}/p" | grep "upper" | grep -o "[0-9.-]*")
+        fi
+        
+        if [ -z "$LOWER" ] || [ -z "$UPPER" ]; then
+            echo "Warning: Could not extract limits for joint '${joint_name}'"
+            echo "Using default limits: -3.14 to 3.14"
+            LOWER="-3.14"
+            UPPER="3.14"
+        fi
+        
+        # Store limits in associative arrays
+        JOINT_LIMITS_LOWER["$joint_name"]="$LOWER"
+        JOINT_LIMITS_UPPER["$joint_name"]="$UPPER"
+        
+        echo "Joint '${joint_name}': limits [${LOWER}, ${UPPER}]"
+    done
+    
+    echo ""
+}
+
 
 
 # Function to move all joints simultaneously
@@ -128,10 +165,12 @@ move_all_joints_simultaneously() {
     local steps=$FREQUENCY  # Number of steps to move through range
     
     # Calculate time per step to complete one cycle in 1/frequency seconds
+    # One complete cycle = forward motion (steps+1) + backward motion (steps+1) = 2*(steps+1) total steps
     local cycle_time=$(echo "scale=6; 1 / $FREQUENCY" | bc -l)
-    local step_time=$(echo "scale=6; $cycle_time / $steps" | bc -l)
+    local total_steps_per_cycle=$(echo "2 * ($steps + 1)" | bc -l)
+    local step_time=$(echo "scale=6; $cycle_time / $total_steps_per_cycle" | bc -l)
     
-    echo "  Cycle time: ${cycle_time}s, Step time: ${step_time}s"
+    echo "  Cycle time: ${cycle_time}s, Total steps per cycle: ${total_steps_per_cycle}, Step time: ${step_time}s"
     echo "  Press Ctrl+C to stop continuous movement"
     
     # Continuous loop through range of motion (lower → upper → lower)
@@ -142,8 +181,9 @@ move_all_joints_simultaneously() {
             local first=true
             
             for joint_name in $JOINT_NAMES; do
-                # Get limits for this joint
-                extract_joint_limits "$joint_name"
+                # Get pre-extracted limits for this joint
+                local LOWER="${JOINT_LIMITS_LOWER[$joint_name]}"
+                local UPPER="${JOINT_LIMITS_UPPER[$joint_name]}"
                 
                 # Calculate position for this step (lower to upper)
                 local range=$(echo "$UPPER - $LOWER" | bc -l)
@@ -181,8 +221,9 @@ move_all_joints_simultaneously() {
             local first=true
             
             for joint_name in $JOINT_NAMES; do
-                # Get limits for this joint
-                extract_joint_limits "$joint_name"
+                # Get pre-extracted limits for this joint
+                local LOWER="${JOINT_LIMITS_LOWER[$joint_name]}"
+                local UPPER="${JOINT_LIMITS_UPPER[$joint_name]}"
                 
                 # Calculate position for this step (upper to lower)
                 local range=$(echo "$UPPER - $LOWER" | bc -l)
@@ -231,6 +272,9 @@ main() {
     
     # Validate that all specified joints exist
     validate_joints
+    
+    # Extract all joint limits once
+    extract_all_joint_limits
     
     # Move all joints simultaneously
     echo "Moving joints simultaneously..."
