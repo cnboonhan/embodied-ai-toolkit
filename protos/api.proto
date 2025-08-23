@@ -29,8 +29,7 @@ message JointLimits {
 
 // Request to update joint positions
 message UpdateJointsRequest {
-  map<string, double> joint_updates = 1;  // joint_name -> new_position
-  map<string, double> custom_joint_updates = 2;  // custom joint_name -> new_position
+  map<string, double> joint_updates = 1;  // joint_name -> new_position (both regular and custom joints)
 }
 
 // Response to joint update

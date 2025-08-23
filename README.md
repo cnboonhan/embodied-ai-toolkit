@@ -24,9 +24,7 @@ grpcurl -plaintext -format json localhost:5000 rosbot_api.RobotApiService/GetRob
 grpcurl -plaintext -d '{
   "joint_updates": {
     "joint_1": 1.57,
-    "joint_2": 0.785
-  },
-  "custom_joint_updates": {
+    "joint_2": 0.785,
     "custom_joint1": 0.5
   }
 }' localhost:5000 rosbot_api.RobotApiService/UpdateJoints

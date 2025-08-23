@@ -77,10 +77,26 @@ def load_urdf(urdf_path: str):
         )
 
 
+def _suppress_warnings(func):
+    """Helper function to suppress warnings during robot configuration updates"""
+    import warnings
+    import sys
+    import os
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        old_stderr = sys.stderr
+        sys.stderr = open(os.devnull, 'w')
+        try:
+            return func()
+        finally:
+            sys.stderr.close()
+            sys.stderr = old_stderr
+
+
 def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider):
     """Update robot configuration and log joint changes to Rerun"""
-    # Update robot configuration
-    robot.update_cfg(np.array([slider.value for slider in slider_handles]))
+    # Update robot configuration with warning suppression
+    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
     
     # Log the updated joint to Rerun
     if updated_slider in slider_handles:
@@ -91,8 +107,8 @@ def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider):
 
 def _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider):
     """Update robot configuration and log custom joint changes to Rerun"""
-    # Update robot configuration (only regular joints affect robot config)
-    robot.update_cfg(np.array([slider.value for slider in slider_handles]))
+    # Update robot configuration (only regular joints affect robot config) with warning suppression
+    _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
     
     # Log the updated custom joint to Rerun
     if updated_slider in custom_slider_handles:
@@ -167,20 +183,56 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
         self._streaming_clients = set()
         self._streaming_active = False
         self._streaming_thread = None
+        
+        # Timing statistics
+        self._total_calls = 0
+        self._total_time = 0.0
+        self._min_time = float('inf')
+        self._max_time = 0.0
+        self._last_stats_time = time.time()
+        
+        # Start statistics reporting thread
+        self._stats_thread = threading.Thread(target=self._report_stats, daemon=True)
+        self._stats_thread.start()
+        print("[STATS] Statistics thread initialized and started")
+    
+    def _report_stats(self):
+        """Report statistics every 10 seconds"""
+        print("[STATS] Statistics reporting thread started")
+        while True:
+            time.sleep(10.0)
+            if self._total_calls > 0:
+                avg_time = self._total_time / self._total_calls
+                print(f"[STATS] gRPC calls: {self._total_calls}, avg: {avg_time:.6f}s, min: {self._min_time:.6f}s, max: {self._max_time:.6f}s")
+                # Reset statistics after printing
+                self._total_calls = 0
+                self._total_time = 0.0
+                self._min_time = float('inf')
+                self._max_time = 0.0
+            else:
+                print("[STATS] No gRPC calls yet")
+    
+    def _update_stats(self, response_time):
+        """Update timing statistics"""
+        self._total_calls += 1
+        self._total_time += response_time
+        self._min_time = min(self._min_time, response_time)
+        self._max_time = max(self._max_time, response_time)
 
     def UpdateJoints(self, request, context):
         """Update joint positions"""
+        start_time = time.time()
         try:
-            # Convert request maps to regular dicts
+            # Convert request map to regular dict
             joint_updates = dict(request.joint_updates)
-            custom_joint_updates = dict(request.custom_joint_updates)
 
             # Validate and update joints
             updated_joints = []
             invalid_joints = []
 
-            # Update regular joints
+            # Process all joint updates (both regular and custom)
             for joint_name, angle in joint_updates.items():
+                # Check if it's a regular joint
                 if joint_name in self.api_server.slider_names:
                     joint_index = self.api_server.slider_names.index(joint_name)
                     slider = self.api_server.slider_handles[joint_index]
@@ -190,11 +242,8 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
                         updated_joints.append(joint_name)
                     else:
                         invalid_joints.append(joint_name)
-                else:
-                    invalid_joints.append(joint_name)
-
-            for joint_name, angle in custom_joint_updates.items():
-                if joint_name in self.api_server.custom_slider_names:
+                # Check if it's a custom joint
+                elif joint_name in self.api_server.custom_slider_names:
                     joint_index = self.api_server.custom_slider_names.index(joint_name)
                     slider = self.api_server.custom_slider_handles[joint_index]
 
@@ -208,23 +257,28 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
 
             if self.api_server.slider_handles:
                 config = [slider.value for slider in self.api_server.slider_handles]
-                self.api_server.robot.update_cfg(np.array(config))
+                # Suppress warnings during robot configuration updates
+                _suppress_warnings(lambda: self.api_server.robot.update_cfg(np.array(config)))
 
+            response_time = time.time() - start_time
+            self._update_stats(response_time)
             return api_pb2.UpdateJointsResponse(
                 updated_joints=updated_joints, invalid_joints=invalid_joints
             )
 
         except Exception as e:
+            response_time = time.time() - start_time
+            self._update_stats(response_time)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Error updating joints: {str(e)}")
             return api_pb2.UpdateJointsResponse(
                 updated_joints=[],
-                invalid_joints=list(joint_updates.keys())
-                + list(custom_joint_updates.keys()),
+                invalid_joints=list(joint_updates.keys()),
             )
 
     def GetRobotInfo(self, request, context):
         """Get comprehensive robot information"""
+        start_time = time.time()
         try:
             joint_positions = {}
             for i, joint_name in enumerate(self.api_server.slider_names):
@@ -254,6 +308,8 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
                     )
                 )
 
+            response_time = time.time() - start_time
+            self._update_stats(response_time)
             return api_pb2.GetRobotInfoResponse(
                 project_name=self.api_server.project_name,
                 joint_names=self.api_server.slider_names,
@@ -267,6 +323,8 @@ class RobotApiServicer(api_pb2_grpc.RobotApiServiceServicer):
             )
 
         except Exception as e:
+            response_time = time.time() - start_time
+            self._update_stats(response_time)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Error getting robot info: {str(e)}")
             return api_pb2.GetRobotInfoResponse()
