@@ -6,8 +6,6 @@ import viser
 from viser.extras import ViserUrdf
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-import json
-import asyncio
 import threading
 import time
 from datetime import datetime
@@ -15,6 +13,7 @@ import grpc
 from concurrent import futures
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
+import rerun as rr
 
 # Import generated gRPC stubs
 from src import api_pb2
@@ -78,6 +77,30 @@ def load_urdf(urdf_path: str):
         )
 
 
+def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider):
+    """Update robot configuration and log joint changes to Rerun"""
+    # Update robot configuration
+    robot.update_cfg(np.array([slider.value for slider in slider_handles]))
+    
+    # Log the updated joint to Rerun
+    if updated_slider in slider_handles:
+        joint_index = slider_handles.index(updated_slider)
+        joint_name = slider_names[joint_index]
+        rr.log(f"joints/{joint_name}", rr.Scalars(updated_slider.value))
+
+
+def _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider):
+    """Update robot configuration and log custom joint changes to Rerun"""
+    # Update robot configuration (only regular joints affect robot config)
+    robot.update_cfg(np.array([slider.value for slider in slider_handles]))
+    
+    # Log the updated custom joint to Rerun
+    if updated_slider in custom_slider_handles:
+        joint_index = custom_slider_handles.index(updated_slider)
+        joint_name = custom_slider_names[joint_index]
+        rr.log(f"custom_joints/{joint_name}", rr.Scalars(updated_slider.value))
+
+
 def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
     slider_names: list[str] = []
     slider_handles: list[viser.GuiInputHandle[float]] = []
@@ -101,9 +124,7 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                 initial_value=initial_pos,
             )
             slider.on_update(
-                lambda _, s=slider: robot.update_cfg(
-                    np.array([slider.value for slider in slider_handles])
-                )
+                lambda _, s=slider: _update_robot_and_log(robot, slider_handles, slider_names, s)
             )
             slider_handles.append(slider)
             slider_names.append(joint_name)
@@ -121,10 +142,20 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                     step=1e-3,
                     initial_value=initial_pos,
                 )
+                slider.on_update(
+                    lambda _, s=slider: _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, s)
+                )
                 custom_slider_handles.append(slider)
                 custom_slider_names.append(custom_joint.name)
 
     robot.update_cfg(np.array([slider.value for slider in slider_handles]))
+    
+    for i, joint_name in enumerate(slider_names):
+        rr.log(f"joints/{joint_name}", rr.Scalars(slider_handles[i].value))
+    
+    for i, joint_name in enumerate(custom_slider_names):
+        rr.log(f"custom_joints/{joint_name}", rr.Scalars(custom_slider_handles[i].value))
+    
     return slider_handles, slider_names, custom_slider_handles, custom_slider_names
 
 
