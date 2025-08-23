@@ -1,15 +1,12 @@
 from robot_descriptions.loaders.yourdfpy import load_robot_description
 from pathlib import Path
 import yourdfpy
-import asyncio
 import numpy as np
 import viser
 from viser.extras import ViserUrdf
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-import asyncio
 import json
-import threading
 
 
 @dataclass
@@ -21,9 +18,12 @@ class CustomJoint:
 
 @dataclass
 class Config:
+    project_name: str
     urdf_path: str
     api_port: int
-    visualization_port: int
+    urdf_viewer_port: int
+    data_viewer_port: int
+    data_grpc_port: int
     custom_joints: Optional[List[CustomJoint]] = None
 
 
@@ -44,9 +44,12 @@ def load_config(config_path: Path) -> Config:
         ]
 
     return Config(
+        project_name=data["project_name"],
         urdf_path=data["urdf_path"],
         api_port=data["api_port"],
-        visualization_port=data["visualization_port"],
+        urdf_viewer_port=data["urdf_viewer_port"],
+        data_viewer_port=data["data_viewer_port"],
+        data_grpc_port=data["data_grpc_port"],
         custom_joints=custom_joints,
     )
 
@@ -129,6 +132,7 @@ class ApiServer:
         self.custom_slider_names = custom_slider_names
         self.robot = robot
         self.port = port
+        
 
     # async def broadcast_joint_update(
     #     self, joints_to_publish=[], custom_joints_to_publish=[]

@@ -1,4 +1,5 @@
 {
+    "project_name": "example_config",
     "urdf_path": "g1_description",
     "custom_joints": [
         {
@@ -8,5 +9,7 @@
         }
     ],
     "api_port": 5000,
-    "visualization_port": 8080
+    "urdf_viewer_port": 8080,
+    "data_viewer_port": 9090,
+    "data_grpc_port": 5001
 }
