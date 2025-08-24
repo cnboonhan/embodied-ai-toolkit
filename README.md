@@ -13,6 +13,7 @@ uv sync
 apt install -y llvm-dev libclang-dev clang libopencv-dev  gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
 
 cd streamer
+rustup target add aarch64-unknown-linux-gnu
 cargo build  
 cargo build --release --target x86_64-unknown-linux-gnu 
 CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-gnu
