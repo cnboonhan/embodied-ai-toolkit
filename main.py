@@ -8,14 +8,16 @@ from src.utils import load_urdf, load_config, setup_ui, ApiServer
 from viser.extras import ViserUrdf
 import rerun as rr
 
-def main(config_path: Path, launch_rerun: bool = True):
+def main(config_path: Path):
 
     config = load_config(config_path)
 
     rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
-    rr.serve_web_viewer(open_browser=False, web_port=config.data_viewer_port, connect_to=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
-    if launch_rerun:
+    if config.data_grpc_port:
         rr.serve_grpc(grpc_port=config.data_grpc_port)
+        if config.data_viewer_port:
+            rr.serve_web_viewer(open_browser=False, web_port=config.data_viewer_port, connect_to=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
+            print(f"Visit for Data View: http://localhost:{config.data_viewer_port}/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A{config.data_grpc_port}%2Fproxy")
 
     viser_server = viser.ViserServer(port=config.urdf_viewer_port, verbose=False, label=config.label)
     urdf_robot = ViserUrdf(viser_server, load_urdf(config.urdf_path), load_meshes=True, load_collision_meshes=False)
@@ -32,7 +34,6 @@ def main(config_path: Path, launch_rerun: bool = True):
         data_uri=f"rerun+http://localhost:{config.data_grpc_port}/proxy"
     )
 
-    print(f"Visit for Data View: http://localhost:{config.data_viewer_port}/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A{config.data_grpc_port}%2Fproxy")
     
     while True:
         time.sleep(1.0 / 30.0)
