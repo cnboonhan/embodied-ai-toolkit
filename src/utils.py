@@ -31,6 +31,7 @@ class CustomJoint:
 class Config:
     project_name: str
     label: str
+    epsisode_name: str
     urdf_path: str
     api_port: int
     urdf_viewer_port: int
@@ -58,6 +59,7 @@ def load_config(config_path: Path) -> Config:
     return Config(
         project_name=data["project_name"],
         label=data["label"],
+        epsisode_name=data["epsisode_name"],
         urdf_path=data["urdf_path"],
         api_port=data["api_port"],
         urdf_viewer_port=data["urdf_viewer_port"],

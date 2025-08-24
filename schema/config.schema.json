@@ -14,6 +14,11 @@
             "description": "Label for Data coming from this stream",
             "examples": ["example_label", "my_robot_label"]
         },
+        "epsisode_name": {
+            "type": "string",
+            "description": "Name of the episode for identification and logging purposes",
+            "examples": ["episode_1", "episode_2"]
+        },
         "urdf_path": {
             "type": "string",
             "description": "Path to the URDF file or robot description name",
@@ -77,6 +82,6 @@
             "default": 5001
         }
     },
-    "required": ["project_name", "label", "urdf_path", "api_port", "urdf_viewer_port", "data_viewer_port", "data_grpc_port"],
+    "required": ["project_name", "label", "epsisode_name", "urdf_path", "api_port", "urdf_viewer_port", "data_viewer_port", "data_grpc_port"],
     "additionalProperties": false
 }

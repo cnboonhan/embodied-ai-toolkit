@@ -12,7 +12,7 @@ def main(config_path: Path):
 
     config = load_config(config_path)
 
-    rr.init(config.project_name, spawn=False)
+    rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
     rr.serve_grpc(grpc_port=config.data_grpc_port)
     rr.serve_web_viewer(open_browser=False, web_port=config.data_viewer_port, connect_to=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
 

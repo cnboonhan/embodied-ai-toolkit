@@ -10,3 +10,5 @@ anyhow = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 image = "0.25"
 imageproc = "0.23"
+nokhwa = { version = "0.10", features = ["input-v4l", "output-threaded"] }
+rusttype = "0.9"
