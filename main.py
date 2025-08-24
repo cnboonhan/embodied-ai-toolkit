@@ -8,13 +8,14 @@ from src.utils import load_urdf, load_config, setup_ui, ApiServer
 from viser.extras import ViserUrdf
 import rerun as rr
 
-def main(config_path: Path):
+def main(config_path: Path, launch_rerun: bool = True):
 
     config = load_config(config_path)
 
     rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
-    rr.serve_grpc(grpc_port=config.data_grpc_port)
     rr.serve_web_viewer(open_browser=False, web_port=config.data_viewer_port, connect_to=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
+    if launch_rerun:
+        rr.serve_grpc(grpc_port=config.data_grpc_port)
 
     viser_server = viser.ViserServer(port=config.urdf_viewer_port, verbose=False)
     urdf_robot = ViserUrdf(viser_server, load_urdf(config.urdf_path), load_meshes=True, load_collision_meshes=False)
