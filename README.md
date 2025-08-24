@@ -9,10 +9,14 @@ uv venv -p 3.11
 source .venv/bin/activate
 uv sync
 # Install grpcurl: https://github.com/fullstorydev/grpcurl/releases
+# Install Rust ( only for building ): https://www.rust-lang.org/tools/install
+apt install -y llvm-dev libclang-dev clang libopencv-dev
+cd streamer; cargo build
+
 uv run main.py --config_path schema/config.json
 ```
 
-## GRPC
+## GRPC API Calls
 ```
 grpcurl -plaintext localhost:5000 list
 grpcurl -plaintext localhost:5000 list rosbot_api.RobotApiService

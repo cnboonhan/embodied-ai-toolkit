@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Streamer.py - A Python script that executes the stream joints command and parses continuous JSON data.
+Streamer.py - A Python script that executes the stream joints command and parses continuous JSON data. Only requies grpcurl binary dependency
 
 Usage:
     python streamer.py

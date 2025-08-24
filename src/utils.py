@@ -415,7 +415,7 @@ class ApiServer:
         robot: ViserUrdf,
         project_name: str,
         api_port: int = 5000,
-        data_uri: str = "rerun+http://localhost:5001/proxy",
+        data_uri: str = "rerun+http://localhost:5050/proxy",
     ):
         self.slider_handles = slider_handles
         self.slider_names = slider_names

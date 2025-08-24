@@ -30,6 +30,8 @@ def main(config_path: Path):
         api_port=config.api_port,
         data_uri=f"rerun+http://localhost:{config.data_grpc_port}/proxy"
     )
+
+    print(f"Visit for Data View: http://localhost:{config.data_viewer_port}/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A{config.data_grpc_port}%2Fproxy")
     
     while True:
         time.sleep(1.0 / 30.0)

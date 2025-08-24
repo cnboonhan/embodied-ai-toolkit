@@ -12,5 +12,5 @@
     "api_port": 5000,
     "urdf_viewer_port": 8080,
     "data_viewer_port": 9090,
-    "data_grpc_port": 5001
+    "data_grpc_port": 5050
 }
