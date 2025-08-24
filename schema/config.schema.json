@@ -9,6 +9,11 @@
             "description": "Name of the project for identification and logging purposes",
             "examples": ["example_config", "my_robot_project"]
         },
+        "label": {
+            "type": "string",
+            "description": "Label for Data coming from this stream",
+            "examples": ["example_label", "my_robot_label"]
+        },
         "urdf_path": {
             "type": "string",
             "description": "Path to the URDF file or robot description name",
@@ -72,6 +77,6 @@
             "default": 5001
         }
     },
-    "required": ["project_name", "urdf_path", "api_port", "urdf_viewer_port", "data_viewer_port", "data_grpc_port"],
+    "required": ["project_name", "label", "urdf_path", "api_port", "urdf_viewer_port", "data_viewer_port", "data_grpc_port"],
     "additionalProperties": false
 }

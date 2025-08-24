@@ -1,5 +1,6 @@
 {
     "project_name": "example_config",
+    "label": "example_actions",
     "urdf_path": "g1_description",
     "custom_joints": [
         {
