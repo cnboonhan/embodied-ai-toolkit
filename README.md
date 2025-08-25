@@ -19,7 +19,8 @@ cargo build --release --target x86_64-unknown-linux-gnu
 CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-gnu
 find . -name "streamer"
 
-uv run main.py --config_path schema/example_config.json
+uv run main.py --config_path config.example.json
+uv run joint_streamer.py --config-path ./schema/config.example.json --update-frequency 10
 ```
 
 ## GRPC API Calls
