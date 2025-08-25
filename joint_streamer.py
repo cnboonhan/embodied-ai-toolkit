@@ -3,36 +3,50 @@
 Streamer.py - A Python script that executes the stream joints command and parses continuous JSON data. Only requies grpcurl binary dependency
 
 Usage:
-    python streamer.py
-    echo '{"update_frequency": 100.0}' | python streamer.py
+    python joint_streamer.py --config_path config.json
+    python joint_streamer.py --config_path config.json --update_frequency 100.0
 """
 
 import json
 import subprocess
 import sys
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from pathlib import Path
+import tyro
+import rerun as rr
+from src.utils import load_config, Config
 
 
-def stream_joint_data(update_frequency: float = 100.0) -> None:
+def stream_joint_data(config: Config, update_frequency: float = 100.0, api_port: Optional[int] = None) -> None:
     """
     Execute the StreamJointData command and parse the continuous JSON stream.
     
     Args:
+        config_data: Configuration data loaded from config file
         update_frequency: Frequency of joint data updates in Hz
+        api_port: API port to connect to (overrides config if provided)
     """
+
+    rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
+    rr.connect_grpc(url=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
+    
     # Construct the grpcurl command
     command = [
         "grpcurl",
         "-plaintext",
         "-format", "json",
         "-d", json.dumps({"update_frequency": update_frequency}),
-        "localhost:5000",
+        f"localhost:{config.api_port}",
         "rosbot_api.RobotApiService/StreamJointData"
     ]
     
     try:
         print(f"Starting joint data stream with frequency: {update_frequency} Hz", file=sys.stderr)
+        print(f"Connecting to API on port: {config.api_port}", file=sys.stderr)
+        print(f"Using label: {config.label}", file=sys.stderr)
+        print(f"Project name: {config.project_name}", file=sys.stderr)
+        print(f"Episode name: {config.epsisode_name}", file=sys.stderr)
         print("Press Ctrl+C to stop streaming", file=sys.stderr)
         print("-" * 50, file=sys.stderr)
         
@@ -63,6 +77,16 @@ def stream_joint_data(update_frequency: float = 100.0) -> None:
                         # Parse the complete JSON object
                         json_data = json.loads(buffer)
                         
+                        # Log joint states to rerun using config label
+                        if "joint_positions" in json_data:
+                            for joint_name, joint_value in json_data["joint_positions"].items():
+                                rr.log(f"{config.label}/joints/{joint_name}", rr.Scalars(joint_value))
+                        
+                        # Log custom joint states to rerun using config label
+                        if "custom_joint_positions" in json_data:
+                            for joint_name, joint_value in json_data["custom_joint_positions"].items():
+                                rr.log(f"{config.label}/custom_joints/{joint_name}", rr.Scalars(joint_value))
+                        
                         # Pretty print the JSON data
                         print(json.dumps(json_data, indent=2))
                         
@@ -89,28 +113,19 @@ def stream_joint_data(update_frequency: float = 100.0) -> None:
             process.terminate()
 
 
-def main():
+def main(config_path: Path, update_frequency: float = 100.0, api_port: Optional[int] = None):
     """Main function to handle stream joints command."""
-    # Check if frequency is provided via stdin
-    if not sys.stdin.isatty():
-        try:
-            # Read frequency from stdin
-            stdin_data = sys.stdin.read().strip()
-            if stdin_data:
-                config = json.loads(stdin_data)
-                frequency = config.get("update_frequency", 100.0)
-            else:
-                frequency = 100.0
-        except json.JSONDecodeError:
-            print("Invalid JSON in stdin, using default frequency", file=sys.stderr)
-            frequency = 100.0
-    else:
-        # Use default frequency
-        frequency = 100.0
+    # Load configuration from file
+    try:
+        config = load_config(config_path)
+        print(f"Loaded configuration from: {config_path}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error loading config file: {e}", file=sys.stderr)
+        sys.exit(1)
     
     # Start streaming joint data
-    stream_joint_data(frequency)
+    stream_joint_data(config, update_frequency, api_port)
 
 
 if __name__ == "__main__":
-    main()
+    tyro.cli(main)
