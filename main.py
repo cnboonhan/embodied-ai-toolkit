@@ -8,7 +8,7 @@ from src.utils import load_urdf, load_config, setup_ui, ApiServer
 from viser.extras import ViserUrdf
 import rerun as rr
 
-def main(config_path: Path):
+def main(config_path: Path, enable_rerun: bool = True):
 
     config = load_config(config_path)
 
