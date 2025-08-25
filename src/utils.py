@@ -13,7 +13,6 @@ import grpc
 from concurrent import futures
 from grpc_reflection.v1alpha import reflection
 from google.protobuf.timestamp_pb2 import Timestamp
-import rerun as rr
 
 # Import generated gRPC stubs
 from src import api_pb2
@@ -102,8 +101,7 @@ def _update_robot_and_log(label, robot, slider_handles, slider_names, updated_sl
     if updated_slider in slider_handles:
         joint_index = slider_handles.index(updated_slider)
         joint_name = slider_names[joint_index]
-        rr.log(f"{label}/joints/{joint_name}", rr.Scalars(updated_slider.value))
-    
+        
     if enable_slider_control is not None and not enable_slider_control.value:
         return
         
@@ -115,7 +113,6 @@ def _update_robot_and_log_custom(label, robot, slider_handles, custom_slider_han
     if updated_slider in custom_slider_handles:
         joint_index = custom_slider_handles.index(updated_slider)
         joint_name = custom_slider_names[joint_index]
-        rr.log(f"{label}/custom_joints/{joint_name}", rr.Scalars(updated_slider.value))
     
     if enable_slider_control is not None and not enable_slider_control.value:
         return
