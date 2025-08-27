@@ -60,9 +60,7 @@ async fn main() -> Result<()> {
         .connect_grpc_opts(args.rerun_endpoint.clone(), None)?;
 
     // Initialize camera with nokhwa
-    let resolution = Resolution::new(args.width, args.height);
-    let camera_format = CameraFormat::new(resolution, FrameFormat::MJPEG, 30); // 30 fps default
-    let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::Exact(camera_format));
+    let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate);
     let camera_index = CameraIndex::Index(args.camera_index);
     
     let mut camera = Camera::new(camera_index, requested)?;
