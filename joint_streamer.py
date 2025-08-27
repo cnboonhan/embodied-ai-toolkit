@@ -29,7 +29,7 @@ def stream_joint_data(config: Config, update_frequency: float = 100.0, api_port:
     """
 
     rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
-    rr.connect_grpc(url=f"rerun+http://localhost:{config.data_grpc_port}/proxy")
+    rr.connect_grpc(url=f"rerun+http://{config.data_host}:{config.data_grpc_port}/proxy")
     
     # Construct the grpcurl command
     command = [
