@@ -67,6 +67,11 @@
             "maximum": 65535,
             "default": 8080
         },
+        "data_host": {
+            "type": "string",
+            "description": "Host of the data viewer server",
+            "default": "127.0.0.1"
+        },
         "data_viewer_port": {
             "type": "integer",
             "description": "Port number for the data viewer server",
@@ -82,6 +87,6 @@
             "default": 5001
         }
     },
-    "required": ["project_name", "label", "epsisode_name", "urdf_path", "api_port", "urdf_viewer_port", "data_viewer_port", "data_grpc_port"],
+    "required": ["project_name", "label", "epsisode_name", "urdf_path", "api_port", "urdf_viewer_port", "data_host", "data_viewer_port", "data_grpc_port"],
     "additionalProperties": false
 }
