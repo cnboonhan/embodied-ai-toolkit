@@ -34,9 +34,6 @@ class Config:
     urdf_path: str
     api_port: int
     urdf_viewer_port: int
-    data_host: str
-    data_viewer_port: int
-    data_grpc_port: int
     custom_joints: Optional[List[CustomJoint]] = None
 
 
@@ -63,9 +60,6 @@ def load_config(config_path: Path) -> Config:
         urdf_path=data["urdf_path"],
         api_port=data["api_port"],
         urdf_viewer_port=data["urdf_viewer_port"],
-        data_host=data["data_host"],
-        data_viewer_port=data["data_viewer_port"],
-        data_grpc_port=data["data_grpc_port"],
         custom_joints=custom_joints,
     )
 
@@ -416,7 +410,6 @@ class ApiServer:
         robot: ViserUrdf,
         project_name: str,
         api_port: int = 5000,
-        data_uri: str = "rerun+http://localhost:5050/proxy",
     ):
         self.slider_handles = slider_handles
         self.slider_names = slider_names
@@ -425,7 +418,6 @@ class ApiServer:
         self.robot = robot
         self.project_name = project_name
         self.api_port = api_port
-        self.data_uri = data_uri
 
         # Initialize gRPC server
         self.grpc_server = None

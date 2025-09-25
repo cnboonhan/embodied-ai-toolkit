@@ -9,7 +9,6 @@ dependencies = [
     "grpcio-reflection>=1.74.0",
     "grpcio-tools>=1.74.0",
     "protobuf>=6.32.0",
-    "rerun-sdk>=0.24.1",
     "robot-descriptions>=1.20.0",
     "tyro>=0.9.28",
     "viser==1.0.1",

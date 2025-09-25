@@ -14,7 +14,6 @@ import time
 from typing import Dict, Any, Optional
 from pathlib import Path
 import tyro
-import rerun as rr
 from src.utils import load_config, Config
 
 
@@ -28,8 +27,6 @@ def stream_joint_data(config: Config, update_frequency: float = 100.0, api_port:
         api_port: API port to connect to (overrides config if provided)
     """
 
-    rr.init(config.project_name, spawn=False, recording_id=config.epsisode_name)
-    rr.connect_grpc(url=f"rerun+http://{config.data_host}:{config.data_grpc_port}/proxy")
     
     # Construct the grpcurl command
     command = [
@@ -77,15 +74,7 @@ def stream_joint_data(config: Config, update_frequency: float = 100.0, api_port:
                         # Parse the complete JSON object
                         json_data = json.loads(buffer)
                         
-                        # Log joint states to rerun using config label
-                        if "joint_positions" in json_data:
-                            for joint_name, joint_value in json_data["joint_positions"].items():
-                                rr.log(f"{config.label}/joints/{joint_name}", rr.Scalars(joint_value))
-                        
-                        # Log custom joint states to rerun using config label
-                        if "custom_joint_positions" in json_data:
-                            for joint_name, joint_value in json_data["custom_joint_positions"].items():
-                                rr.log(f"{config.label}/custom_joints/{joint_name}", rr.Scalars(joint_value))
+                        # Joint states are printed to console
                         
                         # Pretty print the JSON data
                         print(json.dumps(json_data, indent=2))

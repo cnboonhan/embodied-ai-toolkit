@@ -9,17 +9,8 @@ uv venv -p 3.12
 source .venv/bin/activate
 uv sync
 # Install grpcurl: https://github.com/fullstorydev/grpcurl/releases
-# Install Rust ( only for building ): https://www.rust-lang.org/tools/install
-apt install -y llvm-dev libclang-dev clang libopencv-dev  gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
 
-cd streamer
-rustup target add aarch64-unknown-linux-gnu
-cargo build  
-cargo build --release --target x86_64-unknown-linux-gnu 
-CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-gnu
-find . -name "streamer"
-
-uv run main.py --config_path config.example.json
+uv run main.py --config_path schema/config.example.json
 uv run joint_streamer.py --config-path ./schema/config.example.json --update-frequency 10
 ```
 
