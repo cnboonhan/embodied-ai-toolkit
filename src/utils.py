@@ -92,8 +92,8 @@ def _suppress_warnings(func):
             sys.stderr = old_stderr
 
 
-def _update_robot_and_log(label, robot, slider_handles, slider_names, updated_slider, enable_slider_control=None):
-    """Update robot configuration and log joint changes to Rerun"""
+def _update_robot_and_log(robot, slider_handles, slider_names, updated_slider, enable_slider_control=None):
+    """Update robot configuration"""
     if updated_slider in slider_handles:
         joint_index = slider_handles.index(updated_slider)
         joint_name = slider_names[joint_index]
@@ -104,8 +104,8 @@ def _update_robot_and_log(label, robot, slider_handles, slider_names, updated_sl
     _suppress_warnings(lambda: robot.update_cfg(np.array([slider.value for slider in slider_handles])))
 
 
-def _update_robot_and_log_custom(label, robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider, enable_slider_control=None):
-    """Update robot configuration and log custom joint changes to Rerun"""
+def _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, updated_slider, enable_slider_control=None):
+    """Update robot configuration for custom joints"""
     if updated_slider in custom_slider_handles:
         joint_index = custom_slider_handles.index(updated_slider)
         joint_name = custom_slider_names[joint_index]
@@ -142,7 +142,7 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                 initial_value=initial_pos,
             )
             slider.on_update(
-                lambda _, s=slider: _update_robot_and_log(config.label, robot, slider_handles, slider_names, s, enable_slider_control)
+                lambda _, s=slider: _update_robot_and_log(robot, slider_handles, slider_names, s, enable_slider_control)
             )
             slider_handles.append(slider)
             slider_names.append(joint_name)
@@ -161,16 +161,16 @@ def setup_ui(server: viser.ViserServer, robot: ViserUrdf, config: Config):
                     initial_value=initial_pos,
                 )
                 slider.on_update(
-                    lambda _, s=slider: _update_robot_and_log_custom(config.label, robot, slider_handles, custom_slider_handles, custom_slider_names, s, enable_slider_control)
+                    lambda _, s=slider: _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, s, enable_slider_control)
                 )
                 custom_slider_handles.append(slider)
                 custom_slider_names.append(custom_joint.name)
 
     for slider in slider_handles:
-        _update_robot_and_log(config.label, robot, slider_handles, slider_names, slider)
+        _update_robot_and_log(robot, slider_handles, slider_names, slider)
     
     for slider in custom_slider_handles:
-        _update_robot_and_log_custom(config.label, robot, slider_handles, custom_slider_handles, custom_slider_names, slider)
+        _update_robot_and_log_custom(robot, slider_handles, custom_slider_handles, custom_slider_names, slider)
     
     return slider_handles, slider_names, custom_slider_handles, custom_slider_names
 
