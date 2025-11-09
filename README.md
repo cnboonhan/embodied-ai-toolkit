@@ -10,8 +10,16 @@ source .venv/bin/activate
 uv sync
 # Install grpcurl: https://github.com/fullstorydev/grpcurl/releases
 
-uv run main.py --config_path schema/config.example.json
+uv run main.py --config_path schema/teleoperator.example.json
+uv run main.py --config_path schema/robot.example.json
+
 uv run joint_streamer.py --config-path ./schema/config.example.json --update-frequency 10
+```
+
+## LeRobot Integration
+```
+# Build and Run Docker image
+python -m embodied_lerobot.embodied_lerobot_record
 ```
 
 ## GRPC API Calls
