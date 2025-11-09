@@ -17,9 +17,10 @@ RESET_TIME_SEC = 10
 TASK_DESCRIPTION = "DemoRecording"
 REPO_ID = "cnboonhan/embodied-ai-toolkit"
 
-# camera_config = {"front": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=FPS)}
+# camera_config = {"ego": OpenCVCameraConfig(index_or_path=0, width=640, height=480, fps=FPS)}
 robot_config = UrdfFollowerConfig(
-    grpc_endpoint="localhost:5001",
+    action_grpc_endpoint="localhost:5001",
+    observation_grpc_endpoint="localhost:5002",
     motor_whitelist=["right_shoulder_pitch_joint"],
     cameras={}
 )

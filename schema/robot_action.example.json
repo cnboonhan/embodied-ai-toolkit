@@ -1,0 +1,15 @@
+{
+    "project_name": "example_config",
+    "epsisode_name": "episode_i",
+    "label": "urdf_follower_action",
+    "urdf_path": "g1_description",
+    "custom_joints": [
+        {
+            "name": "custom_joint1",
+            "type": "revolute",
+            "limits": [0.0, 2.0]
+        }
+    ],
+    "api_port": 5001,
+    "urdf_viewer_port": 8081
+}

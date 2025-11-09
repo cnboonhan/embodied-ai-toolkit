@@ -24,6 +24,7 @@ from lerobot.robots.config import RobotConfig
 @RobotConfig.register_subclass("urdf_follower")
 @dataclass
 class UrdfFollowerConfig(RobotConfig):
-    grpc_endpoint: str
+    observation_grpc_endpoint: str
+    action_grpc_endpoint: str
     motor_whitelist: list[str]
     cameras: dict[str, CameraConfig] = field(default_factory=dict)

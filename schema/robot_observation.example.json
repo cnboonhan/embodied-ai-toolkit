@@ -1,7 +1,7 @@
 {
     "project_name": "example_config",
     "epsisode_name": "episode_i",
-    "label": "urdf_follower",
+    "label": "urdf_follower_observation",
     "urdf_path": "g1_description",
     "custom_joints": [
         {
